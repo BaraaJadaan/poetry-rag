@@ -1,0 +1,19 @@
+[project]
+name = "poetry-rag"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "chromadb>=1.5.9",
+    "datasets>=5.0.0",
+    "huggingface-hub",
+    "llama-cpp-python @ file:///C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl",
+    "setuptools>=65.0.0,<71",
+    "tqdm>=4.69.0",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
+]

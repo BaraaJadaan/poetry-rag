@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arabic Poetry RAG â€” Concepts Log</title>
+<style>
+  :root {
+    --paper: #FBFAF6;
+    --dot: #DEDACE;
+    --ink: #1B2622;
+    --ink-soft: #566058;
+    --ink-faint: #8B9389;
+    --accent: #AD7233;
+    --accent-soft: #EDE0CC;
+    --rule: #DAD5C7;
+    --card: #FFFFFF;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, "Segoe UI", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background-color: var(--paper);
+    background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    padding-bottom: 8rem;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 1.5rem; }
+
+  header.masthead {
+    padding: clamp(2.5rem, 6vw, 4.5rem) 0 2rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.9rem;
+  }
+  h1#project-title {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+    line-height: 1.15;
+    margin: 0 0 0.6rem;
+    color: var(--ink);
+  }
+  p.tagline {
+    font-size: clamp(1rem, 2vw, 1.1rem);
+    color: var(--ink-soft);
+    margin: 0 0 1.1rem;
+    max-width: 46ch;
+  }
+  p.meta {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    margin: 0;
+  }
+
+  nav.index {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    padding: 0.7rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+  }
+  nav.index a {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    text-decoration: none;
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    background: var(--card);
+    white-space: nowrap;
+  }
+  nav.index a:hover, nav.index a:focus-visible { border-color: var(--accent); color: var(--accent); }
+
+  main#entries { padding-top: 1rem; }
+
+  #empty-state {
+    margin: 3rem 0;
+    padding: 2rem;
+    border: 1px dashed var(--rule);
+    border-radius: 10px;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  article.entry {
+    padding: 2.4rem 0;
+    border-bottom: 1px solid var(--rule);
+    scroll-margin-top: 4rem;
+  }
+  article.entry:last-child { border-bottom: none; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 0.6rem;
+  }
+  .eyebrow .num { color: var(--accent); font-weight: 600; }
+  h2.term {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.3rem, 3vw, 1.6rem);
+    margin: 0 0 0.7rem;
+  }
+  p.explain {
+    margin: 0 0 1.1rem;
+    color: var(--ink);
+  }
+  .why, .versus {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    border-radius: 0 8px 8px 0;
+    padding: 0.85rem 1.1rem;
+    margin: 0 0 0.8rem;
+  }
+  .versus {
+    border-left-color: var(--ink-faint);
+    background: transparent;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--ink-faint);
+  }
+  .why .label, .versus .label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 0.3rem;
+  }
+  .why p:last-child, .versus p:last-child { margin: 0; }
+
+  @media (max-width: 520px) {
+    nav.index { gap: 0.35rem 0.5rem; }
+  }
+
+  @media print {
+    body { background-image: none; }
+    nav.index { display: none; }
+    article.entry { break-inside: avoid; }
+    .why, .versus { background: transparent; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">Concepts Log</p>
+    <h1 id="project-title">Arabic Poetry RAG</h1>
+    <p class="tagline">Semantic verse-finder for classical Arabic poetry — find the right bait for any occasion</p>
+    <p class="meta"><span id="entry-count">0</span> concepts logged Â· started July 2026</p>
+  </header>
+
+  <nav class="index" id="phase-index" aria-label="Jump to phase"></nav>
+
+  <main id="entries">
+    <div id="empty-state">
+      No concepts logged yet. As new ideas come up while building, each one gets its own
+      entry here â€” in the order they were actually encountered, not reshuffled into a neat
+      syllabus after the fact.
+    </div>
+
+    <!--
+      ENTRY SCHEMA â€” copy this exact block for every new concept, fill every field, then
+      insert it immediately above the insertion-point marker near the bottom of this file.
+      No need to touch the #empty-state message above â€” the script hides it automatically
+      once an entry exists. The .num span and the phase nav are filled in automatically too
+      â€” never hand-write entry numbers. Omit the entire "versus" div if there was no real
+      alternative being weighed for this concept; don't force one to exist.
+
+    <article class="entry" data-phase="Phase name, e.g. Retrieval">
+      <p class="eyebrow">ENTRY <span class="num"></span> Â· Phase name</p>
+      <h2 class="term">Concept name</h2>
+      <p class="explain">
+        Plain-language explanation of what this actually is, written for someone smart but
+        unfamiliar with it. Three to six sentences is plenty â€” this is a primer, not a paper.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The concrete reason this showed up in THIS project â€” tie it to the actual
+        decision or problem it solved, not a generic definition.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Alternative name</p>
+        <p>What the alternative would have done differently, and the concrete tradeoff that
+        decided it.</p>
+      </div>
+    </article>
+
+    -->
+
+    <article class="entry" data-phase="Core Architecture">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Core Architecture</p>
+      <h2 class="term">Retrieval-Augmented Generation (RAG)</h2>
+      <p class="explain">
+        A pattern where a language model's response is grounded in documents retrieved at
+        query time rather than relying purely on what was baked into its weights during
+        training. The pipeline has two stages: first, a retrieval system finds the most
+        relevant chunks from a corpus; then, a generation model uses those chunks as context
+        to produce a final answer. The model never needs to memorise the corpus — it only
+        needs to read and synthesise what retrieval hands it.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The Arabic poetry corpus (254k verses) is far too large and too specialised
+        to expect any general LLM to recall correctly from weights. RAG lets us keep the
+        corpus as a queryable index and only surface the exact verses that match a given
+        mood or occasion — which is precisely the task.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Fine-tuning</p>
+        <p>Fine-tuning bakes knowledge into the model's weights. For a portfolio project,
+        the problem is that a non-technical reviewer cannot distinguish a well-tuned model
+        from a poorly-tuned one by reading a README — the skill becomes invisible. RAG
+        externalises the knowledge, making every retrieval decision legible and defensible
+        in an interview.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Core Architecture">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Core Architecture</p>
+      <h2 class="term">Asymmetric Retrieval</h2>
+      <p class="explain">
+        All four Voyage 4 models share one embedding space — meaning a vector produced by
+        voyage-4-nano and one produced by voyage-4-large are directly comparable by cosine
+        similarity. This enables a split: use a larger, slower model to embed the corpus
+        once offline, and a smaller, faster model to embed queries at serving time. The
+        index never needs to be rebuilt when you switch query models, because the geometry
+        is shared.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>This project embeds 254k verses once, locally, at leisure — no time pressure.
+        At serving time, the query embedding runs on CPU on a cheap host (Render, Fly.io)
+        that has no GPU. voyage-4-nano is small enough to run on CPU in under a second per
+        query, which is what makes a GPU-less deployment viable. The shared embedding space
+        is what makes this a real architecture decision rather than just using the small
+        model everywhere.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Using the same model for corpus and query</p>
+        <p>If embedding space weren't shared across model sizes, you'd be locked into
+        whatever model you indexed with. Using nano everywhere is simpler but loses the
+        option to upgrade corpus embedding quality later without re-indexing. The asymmetric
+        design preserves that upgrade path at zero re-indexing cost.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Data">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Data</p>
+      <h2 class="term">Hemistich, Sadr, Ajuz — the structure of a classical Arabic verse</h2>
+      <p class="explain">
+        A classical Arabic verse (بيت, <em>bait</em>) is divided into two half-lines:
+        the sadr (صدر, "chest") and the ajuz (عجز, "tail"). Each half is called a
+        hemistich (شطر). The split point is dictated by the poem's meter (بحر), not by
+        word boundaries — which means the hemistich break can fall mid-word. In the Ashaar
+        dataset, every hemistich is stored as a separate list entry, so consecutive pairs
+        must be reunited to recover the full verse.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Embedding individual hemistichs would mean retrieving half-verses — wrong
+        citation unit and too short for a meaningful embedding. The chunking function pairs
+        consecutive entries (verses[0]+verses[1], verses[2]+verses[3], …) to reconstruct
+        full baits. Poems with an odd number of hemistichs (9.57% of the corpus) get a
+        trailing orphan chunk flagged with <code>is_orphan=True</code> rather than
+        discarded, so no content is silently lost.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Data Cleaning">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Data Cleaning</p>
+      <h2 class="term">Dual-representation chunking: text_display vs. text_index</h2>
+      <p class="explain">
+        Each chunk in this pipeline carries two versions of its text. <code>text_display</code>
+        preserves the original Arabic with full tashkeel (diacritics) exactly as it appears
+        in the source — this is what users see in the UI. <code>text_index</code> is a
+        normalised copy stripped of diacritics and with orthographic variants unified — this
+        is what gets embedded and indexed. The two are generated once at chunking time and
+        stored together in every chunk dict.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Classical Arabic poetry relies on diacritics (tashkeel) for correct
+        pronunciation and metrical reading — stripping them from the display copy would
+        degrade the reading experience. But a user typing on a keyboard almost never adds
+        diacritics, so a query for كتب would fail to match كَتَبَ in a raw byte comparison.
+        Normalising only the index copy solves both problems without trading one off against
+        the other.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Normalising a single copy used for both display and retrieval</p>
+        <p>Simpler to implement but wrong: the UI would show stripped, unvocalised text,
+        and an interviewer asking "how do users read the returned verses" would immediately
+        surface the problem. The extra field costs almost nothing at storage scale.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Data Cleaning">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Data Cleaning</p>
+      <h2 class="term">Arabic text normalisation for information retrieval</h2>
+      <p class="explain">
+        Arabic has several orthographic variations that create false vocabulary splits in
+        retrieval systems: multiple spellings of alef (أ, إ, آ, ا), two forms of
+        word-final ya (ي vs. ى), and teh marbuta (ة) which some writers render as heh (ه).
+        Standard Arabic IR preprocessing collapses these variants and strips tashkeel
+        (diacritics) so that أحمد, إحمد, and احمد all match the same query token. This
+        project applies four transformations using pure Python regex and str.maketrans —
+        no external Arabic NLP library needed at this stage.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The Ashaar corpus is fully diacriticised (مُشَكَّل), while user queries will
+        almost never include diacritics. Without normalisation, a query for الصبر would
+        miss الصَّبرُ entirely in BM25 and would produce noisier cosine distances for
+        the embedding model. Applying the four standard transforms to <code>text_index</code>
+        closes this gap without any external dependency or download.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Data Cleaning">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Data Cleaning</p>
+      <h2 class="term">Exclusion-list filtering vs. inclusion-list filtering</h2>
+      <p class="explain">
+        When filtering a dataset on a categorical field with multiple valid values, there
+        are two approaches: require membership in a known "good" set (inclusion list), or
+        reject membership in a known "bad" set (exclusion list). Inclusion filtering is
+        stricter — anything not explicitly on the list is dropped. Exclusion filtering is
+        more permissive — anything not explicitly on the bad list is kept, including
+        unlabelled rows.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The <code>poem language type</code> field uses two different spellings for
+        classical Arabic (فصيح at 60.4% and فصحى at 8.2%), and 28% of rows have
+        <code>None</code> — which are overwhelmingly classical poems that just weren't
+        tagged. An inclusion filter on "فصيح" alone would drop 36% of classical content.
+        The exclusion list approach — drop عامي, شعبي, and "-" — retains everything
+        classical (including untagged rows) while removing the 3.4% that are demonstrably
+        colloquial.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Inclusion filter on {"فصيح", "فصحى"}</p>
+        <p>Would drop the 28% null rows — a large chunk of real classical content lost
+        because of missing labels, not because the content is wrong. Exclusion filtering
+        is the right tool when nulls are common and the null distribution is known to be
+        predominantly valid.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Embedding Sanity Check">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Embedding Sanity Check</p>
+      <h2 class="term">KV cache contamination in sequential embedding</h2>
+      <p class="explain">
+        Language models maintain a key-value cache (KV cache) that stores intermediate
+        attention computations across tokens, allowing subsequent tokens to attend to
+        previous ones without recomputing. Embedding models reuse the same infrastructure.
+        When you call <code>embed()</code> once per text string in a loop, some
+        llama-cpp-python versions do not clear this cache between calls — so the second
+        string's embedding is computed with leftover state from the first, producing a
+        vector that is partly the first string's representation. In the worst case, the
+        model just returns the cached output unchanged, giving cosine similarity of exactly
+        1.0 between two completely different inputs.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The first sanity check run showed <code>[2] & [3] = 1.0000</code> — the war
+        verses produced identical vectors. Every pair involving [2] or [3] was therefore
+        meaningless. The fix is to pass all inputs as a list in a single
+        <code>llm.embed(list_of_texts)</code> call, which processes them in one fresh
+        context and avoids cross-contamination entirely.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Calling reset() between embed() calls</p>
+        <p>An alternative fix is to call <code>llm.reset()</code> before each embed to
+        clear the KV cache manually. Batch embedding is preferable: it's cleaner, faster
+        (one forward pass over all inputs), and doesn't require knowing the llama-cpp-python
+        internal API.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Embedding Sanity Check">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Embedding Sanity Check</p>
+      <h2 class="term">Embedding sanity check — validating a model before full-corpus indexing</h2>
+      <p class="explain">
+        Before embedding a 254k-verse corpus — a process that takes hours and produces a
+        multi-gigabyte vector store — it's worth verifying that the embedding model actually
+        captures Arabic semantic similarity rather than just outputting high-dimensional
+        noise. A sanity check embeds a handful of carefully chosen sentences that have
+        known relative similarity: two verses about the same theme should score higher than
+        two from different themes. If the similarity scores show no gradient — everything
+        clusters at 0.95 — the model is likely outputting near-constant vectors for the
+        language in question, and you'd catch that in minutes rather than hours.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>There is no published Arabic-specific benchmark for voyage-4-nano. Rather than
+        assume multilingual training translates to good Arabic semantic separation, we
+        embedded 5 test verses spanning patience, war/courage, and love. The clean pairs
+        (unaffected by the KV cache bug) showed a real gradient: patience-patience scored
+        0.74, patience-love scored 0.57–0.64. The model is differentiating. This is the
+        evidence that justifies committing to full-corpus embedding.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Embedding Sanity Check">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Embedding Sanity Check</p>
+      <h2 class="term">Q8_0 quantization collapse</h2>
+      <p class="explain">
+        8-bit quantization (Q8_0) reduces each 32-bit float weight to 8 bits, shrinking
+        model size by ~75% with minimal quality loss for most inputs. "Most" is the key
+        word. For inputs that are already semantically close — same poet, same meter, same
+        high-register vocabulary — the quantization rounding can push two already-similar
+        internal representations across a rounding boundary into the same quantized value,
+        producing identical output vectors. Cosine similarity is then exactly 1.0, which is
+        a red flag, not a good sign: two different sentences cannot legitimately produce
+        the same embedding vector.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Two verses by المتنبي — one about patience, one about the sword — produced
+        identical raw 1024-dim vectors even after explicit KV cache clearing. Replacing one
+        with a verse by عنترة بن شداد (different poet, different era, different diction)
+        immediately produced a distinct vector. Conclusion: the collapse is poet-style
+        specific, not a general failure of the model. For the 254k-verse corpus, المتنبي
+        is the most prolific contributor — this collapse rate should be monitored during
+        full-corpus embedding, but it is not a reason to abandon Q8_0.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. F16 GGUF</p>
+        <p>The F16 GGUF preserves full float16 precision (identical to the original
+        safetensors model) and eliminates quantization collapse at the cost of nearly
+        double the file size (~695 MB vs ~372 MB). If collapse proves widespread during
+        full-corpus embedding, switching to F16 is the fix — same repo, different filename,
+        same loading code.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Embedding Sanity Check">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Embedding Sanity Check</p>
+      <h2 class="term">Authorial / stylistic signal in embedding space</h2>
+      <p class="explain">
+        Embedding models trained on large multilingual corpora learn more than just
+        thematic content — they also encode lexical style, register, and, for literary
+        corpora, the distinctive voice of individual authors. In a similarity matrix,
+        this shows up as same-author pairs scoring higher than cross-author pairs even
+        when the themes differ: المتنبي's patience verse and المتنبي's sword verse scored
+        0.88, while patience-vs-patience across different registers (المتنبي vs. a hadith)
+        scored only 0.74.
+      </p>
+      <div class="why">
+        <p class="label">Why it matters for this project</p>
+        <p>For a poetry RAG system, stylistic signal is a feature. A user searching for
+        "المتنبي's way of writing about courage" should surface both his war verses
+        <em>and</em> his stoic-endurance verses — they share diction, meter, and
+        rhetorical stance even if the nominal theme differs. What matters is that
+        clearly different semantic domains (love vs. war) remain well-separated, and
+        the data confirmed they do: love verses scored 0.57–0.64 against everything
+        else, a consistent gap below the 0.73+ in-domain floor.</p>
+      </div>
+    </article>
+
+    <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
+  </main>
+
+</div>
+
+<script>
+(function () {
+  var entries = Array.prototype.slice.call(document.querySelectorAll('.entry'));
+  document.getElementById('entry-count').textContent = entries.length;
+  document.getElementById('empty-state').style.display = entries.length ? 'none' : '';
+
+  var nav = document.getElementById('phase-index');
+  var seenPhases = [];
+  entries.forEach(function (el, i) {
+    var num = String(i + 1).padStart(3, '0');
+    var numEl = el.querySelector('.num');
+    if (numEl) numEl.textContent = num;
+    el.id = 'entry-' + num;
+    var phase = el.getAttribute('data-phase') || 'General';
+    if (seenPhases.indexOf(phase) === -1) {
+      seenPhases.push(phase);
+      var a = document.createElement('a');
+      a.href = '#entry-' + num;
+      a.textContent = phase;
+      nav.appendChild(a);
+    }
+  });
+  if (!entries.length) nav.style.display = 'none';
+})();
+</script>
+</body>
+</html>

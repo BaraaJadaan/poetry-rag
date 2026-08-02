@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arabic Poetry RAG â€” Interview Q&amp;A</title>
+<style>
+  :root {
+    --paper: #FBFAF6;
+    --dot: #DEDACE;
+    --ink: #1B2622;
+    --ink-soft: #566058;
+    --ink-faint: #8B9389;
+    --rule: #DAD5C7;
+    --card: #FFFFFF;
+    --technical: #AD7233;
+    --technical-soft: #EDE0CC;
+    --trick: #8B3A2F;
+    --trick-soft: #F1DCD7;
+    --general: #3E5C76;
+    --general-soft: #DCE3EA;
+    --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+    --sans: -apple-system, "Segoe UI", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background-color: var(--paper);
+    background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+    background-size: 22px 22px;
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    padding-bottom: 8rem;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; padding: 0 1.5rem; }
+  button { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--technical); outline-offset: 2px; }
+
+  header.masthead {
+    padding: clamp(2.5rem, 6vw, 4.5rem) 0 2rem;
+    border-bottom: 1px solid var(--rule);
+  }
+  .kicker {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--technical);
+    margin: 0 0 0.9rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.8rem, 4.5vw, 2.6rem);
+    line-height: 1.15;
+    margin: 0 0 0.6rem;
+  }
+  p.tagline {
+    font-size: clamp(1rem, 2vw, 1.1rem);
+    color: var(--ink-soft);
+    margin: 0 0 1.1rem;
+    max-width: 46ch;
+  }
+  p.meta {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    margin: 0;
+  }
+
+  .controls {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule);
+    padding: 0.8rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+  .filters { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 0.35rem 0.8rem;
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .chip.active { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+  #random-btn {
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.45rem 1rem;
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #random-btn:hover { opacity: 0.85; }
+
+  main#qa-list { padding-top: 1.4rem; }
+
+  #empty-state {
+    margin: 3rem 0;
+    padding: 2rem;
+    border: 1px dashed var(--rule);
+    border-radius: 10px;
+    color: var(--ink-soft);
+    font-size: 0.95rem;
+  }
+
+  article.qa-card {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    padding: 1.6rem 1.7rem;
+    margin-bottom: 1rem;
+    scroll-margin-top: 6rem;
+    transition: box-shadow 0.3s ease;
+  }
+  article.qa-card.pulse { box-shadow: 0 0 0 3px var(--technical); }
+
+  .eyebrow { display: flex; align-items: center; gap: 0.6rem; margin: 0 0 0.7rem; }
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.2rem 0.55rem;
+    border-radius: 5px;
+    background: var(--technical-soft);
+    color: var(--technical);
+  }
+  .qa-card[data-category="trick"] .tag { background: var(--trick-soft); color: var(--trick); }
+  .qa-card[data-category="general"] .tag { background: var(--general-soft); color: var(--general); }
+  .num {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+  }
+
+  h2.question {
+    font-family: var(--serif);
+    font-weight: 400;
+    font-size: clamp(1.1rem, 2.6vw, 1.3rem);
+    margin: 0 0 1rem;
+  }
+
+  .reveal-btn {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--ink);
+    border-radius: 999px;
+    padding: 0.4rem 0.95rem;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .reveal-btn:hover { background: var(--ink); color: var(--paper); }
+
+  .answer {
+    margin-top: 1.1rem;
+    padding-top: 1.1rem;
+    border-top: 1px dashed var(--rule);
+    color: var(--ink);
+  }
+  .answer p { margin: 0 0 0.8rem; }
+  .answer p:last-child { margin-bottom: 0; }
+  .answer .misconception {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--trick);
+    margin: 0 0 0.4rem;
+  }
+
+  .rate-btns {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1.1rem;
+    padding-top: 1.1rem;
+    border-top: 1px dashed var(--rule);
+  }
+  .rate-btn {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 0.3rem 0.75rem;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+  .rate-btn:hover { border-color: var(--ink); color: var(--ink); }
+  .rate-btn.rate-good.active { background: var(--general-soft); border-color: var(--general); color: var(--general); }
+  .rate-btn.rate-review.active { background: var(--trick-soft); border-color: var(--trick); color: var(--trick); }
+  article.qa-card[data-reviewed="review"] { border-left: 3px solid var(--trick); }
+  article.qa-card[data-reviewed="good"] { border-left: 3px solid var(--general); }
+
+  #review-toggle {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    padding: 0.4rem 0.9rem;
+    background: var(--card);
+    color: var(--ink-soft);
+    cursor: pointer;
+    display: none;
+    white-space: nowrap;
+  }
+  #review-toggle.active { background: var(--trick); border-color: var(--trick); color: var(--paper); }
+
+  @media (max-width: 520px) {
+    .controls { flex-direction: column; align-items: stretch; }
+    #random-btn { width: 100%; }
+  }
+
+  @media print {
+    body { background-image: none; }
+    .controls { display: none; }
+    .reveal-btn { display: none; }
+    .answer[hidden] { display: block !important; }
+    .rate-btns { display: none; }
+    article.qa-card { break-inside: avoid; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="kicker">Interview Prep</p>
+    <h1>Arabic Poetry RAG</h1>
+    <p class="tagline">Questions a sharp interviewer would actually ask about this project â€” with the answer that proves it was really built, not just followed.</p>
+    <p class="meta"><span id="q-count">0</span> questions logged</p>
+  </header>
+
+  <div class="controls">
+    <div class="filters" id="filters" aria-label="Filter by category"></div>
+    <button id="review-toggle" type="button" title="Resets on reload â€” a one-sitting study aid, not saved progress">Needs review only</button>
+    <button id="random-btn" type="button">Quiz me at random â†’</button>
+  </div>
+
+  <main id="qa-list">
+    <div id="empty-state">
+      No questions logged yet. As real decisions get made while building, the questions an
+      interviewer would ask about them land here â€” technical-decision questions, the
+      occasional trick question, and the bigger whole-project questions once there's enough
+      built to reflect on.
+    </div>
+
+    <!--
+      CARD SCHEMA â€” copy this exact block for every new question, fill every field, then
+      insert it immediately above the insertion-point marker near the bottom of this file.
+      No need to touch the #empty-state message above, or the filter bar and quiz button â€”
+      the script shows and hides all three automatically depending on whether a card exists
+      yet. The .num span, the question count, and the filter chips are also filled in
+      automatically â€” never hand-write question numbers or maintain a separate category
+      list.
+
+      data-category is exactly one of:
+        technical  â€” a real "why X, not Y" decision, with the concrete tradeoff
+        trick      â€” corrects a plausible-sounding but wrong assumption, and explains the
+                     real mechanism, not just "wrong, next question"
+        general    â€” whole-project reflection: architecture, dataset/tooling rationale,
+                     struggles, scaling, what you'd change (see references/writing_great_
+                     questions.md for the shape of a strong answer to each of these)
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why did you choose X over Y?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Direct answer in one sentence, then the concrete reasoning (2-4 sentences: the
+        actual tradeoff, not vibes), then the honest limitation of the choice â€” the
+        situation where you'd pick differently. For a trick question, put a one-line
+        <span class="misconception">Common misconception</span> note before the correction.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    -->
+
+    <!-- The rate-btns block above is session-only self-assessment (no data is saved anywhere
+    â€” it resets on reload, on purpose, so this file keeps working as a plain offline
+    document). Always include it exactly as shown; the script below wires it up. -->
+
+    <article class="qa-card" data-category="general">
+      <p class="eyebrow"><span class="tag">General</span><span class="num"></span></p>
+      <h2 class="question">Why RAG and not fine-tuning for this project?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>RAG externalises the knowledge so every retrieval decision is legible; fine-tuning
+        buries it in weights where it's invisible. For a portfolio project specifically, a
+        non-technical reviewer cannot distinguish a well-tuned model from a poorly-tuned one
+        by reading a README — the technical skill becomes invisible to the exact audience
+        that matters.</p>
+        <p>The honest tradeoff: RAG requires a retrieval system to be built and maintained,
+        and its quality ceiling is bounded by what's in the corpus. Fine-tuning can
+        generalise beyond the corpus and can be faster at inference. But for a 254k-verse
+        index where the task is precise verse-level recall — not generating new text in the
+        style of classical poetry — the retrieval approach matches the problem shape better.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why voyage-4-nano instead of a larger model, or an open-weight model like nomic-embed?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Two reasons that are specific to this project, not generic "it's fast."</p>
+        <p>First, all four Voyage 4 models share one embedding space. That means the corpus
+        can be embedded once with nano and the query embedding can be swapped to a larger
+        model later — without re-indexing. The index is permanent; the query model is
+        interchangeable. That's the asymmetric retrieval property, and it's what makes the
+        deployment economics work: corpus embedding happens once locally; query embedding
+        at serving time must run on CPU on a GPU-less host, where nano is fast enough.</p>
+        <p>Second, there is no Arabic-specific benchmark number for voyage-4-nano. Rather
+        than assume multilingual support translates to good Arabic performance, the plan is
+        to sanity-check it empirically on a small sample — embed ~15–20 verses, confirm
+        thematically similar ones cluster — before committing the full corpus. That
+        validation step is the right answer for "how did you verify model choice" in an
+        interview.</p>
+        <p>The honest limit: nomic-embed-text is fully open-weight and runs locally for
+        free. If the manual sanity check showed voyage-4-nano clustering poorly on Arabic,
+        nomic would be the first alternative to test.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why Chroma or LanceDB instead of Pinecone or Qdrant?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Both Chroma and LanceDB run in-process — no server to stand up, no managed
+        service to pay for, no Docker container to keep running. For a portfolio project
+        with a single-developer deployment target, operational overhead is a real cost, and
+        an in-process store eliminates it entirely.</p>
+        <p>The honest limit: in-process stores don't scale horizontally. A real production
+        system at millions of queries would graduate to Qdrant (self-hosted, strong
+        performance/cost) or Pinecone (fully managed, easiest ops). Both are worth knowing
+        by name. The choice here is explicitly right-sized to portfolio scope, not
+        production scale — and saying that clearly in an interview is a stronger answer
+        than pretending in-process scales forever.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why is a full verse (bait) the chunking unit, rather than a hemistich or a full poem?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The retrieval unit should match the citation unit. Users ask for "a verse about
+        patience" — they want a bait (صدر + عجز), the complete unit of classical Arabic
+        poetry that expresses a single complete thought. That's what gets cited, shared,
+        and attributed.</p>
+        <p>A hemistich (half-verse) is too short — it's half a thought, and often
+        grammatically incomplete. A full poem is too long — the embedding would average
+        across many themes and the query would compete against the poem's dominant topic
+        rather than its individual verses. The bait is the natural granularity for both
+        semantic meaning and user expectation.</p>
+        <p>The honest complication: the Ashaar dataset stores hemistichs as individual list
+        entries, so the chunking function has to pair consecutive entries. 9.57% of poems
+        have an odd number of hemistichs — those get an orphan chunk flagged with
+        is_orphan=True rather than discarded, so content isn't silently lost.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why does each chunk store both text_display and text_index instead of just one copy?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>They serve different masters. text_display is shown to the user — it must
+        preserve full tashkeel (diacritics) because classical Arabic poetry is recited,
+        and diacritics carry pronunciation and metrical information that plain text loses.
+        text_index is what gets embedded and fed to BM25 — it must be normalised so that
+        a query typed without diacritics (which is how virtually everyone types Arabic on
+        a keyboard) matches the diacriticised corpus.</p>
+        <p>If you normalise the single copy, you break the display. If you don't normalise,
+        you break retrieval. Two fields, generated once at chunking time, resolves both
+        without any runtime cost.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">You strip diacritics for retrieval — doesn't that lose meaning? In Arabic, كَتَبَ (he wrote) and كُتِبَ (it was written) differ only in diacritics.</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p class="misconception">Common misconception</p>
+        <p>Conflating "normalise for retrieval" with "permanently destroy the distinction."
+        The diacritics are lost only from text_index — the retrieval copy. text_display
+        retains them fully. When a verse is retrieved and shown to the user, the full
+        diacriticised form is what they see.</p>
+        <p>The retrieval accuracy tradeoff is real but asymmetric: without stripping,
+        a user querying كتب would miss every verse containing كَتَبَ. That's a false
+        negative that degrades recall. With stripping, both كَتَبَ and كُتِبَ become كتب
+        in the index, so a query for one retrieves the other — a very slight increase in
+        false positives that the reranking stage can handle. The net effect is strongly
+        positive for recall, which is the right priority in a verse-finding context where
+        missing a good verse is worse than surfacing a slightly imprecise one.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why use an exclusion list to filter for classical Arabic, rather than an inclusion list?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because 28% of the corpus has a null language type — and that null population
+        is overwhelmingly classical poetry that simply wasn't tagged, not colloquial poetry
+        that was mislabelled. An inclusion filter (keep only فصيح and فصحى) would discard
+        28% of valid classical content because of missing labels, not because of anything
+        wrong with the poems.</p>
+        <p>The exclusion approach — drop عامي (colloquial dialect), شعبي (folk), and "-"
+        (placeholder) — removes the 3.4% that are demonstrably not classical while keeping
+        everything else, including the untagged rows. This is the right tool when nulls are
+        common and their distribution is known (verified by spot-checking) to be valid.</p>
+        <p>The honest caveat: if the null rows contain a meaningful fraction of colloquial
+        poetry that wasn't labelled, this filter would miss them. That's a known risk,
+        acceptable at portfolio scale, and worth noting in the README.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">The hemistich boundary can split a word mid-syllable. Don't you need to fix that before embedding?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p class="misconception">Common misconception</p>
+        <p>Assuming that word-level tokenisation matters to a transformer-based embedding
+        model the way it matters to BM25.</p>
+        <p>voyage-4-nano (and virtually every modern embedding model) uses subword
+        tokenisation — the vocabulary operates at the character-n-gram or byte-pair-encoding
+        level, not at whitespace-delimited words. A split like الخَل + قَ (from الخلق,
+        "creation") becomes two adjacent subword tokens in the model's input. The model
+        has seen split forms in multilingual pretraining and handles them without
+        reconstruction. So for embedding, the mid-word split is not a problem in practice.</p>
+        <p>For BM25, however, it is a real problem — BM25 is exact-match on
+        whitespace-delimited tokens. الخل ق will not match a query for الخلق. This is a
+        known limitation flagged for the BM25 build step, where Arabic-aware morphological
+        tokenisation (which analyses roots and prefixes rather than splitting on spaces)
+        will address it. The two retrieval methods need different approaches.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">Your sanity check showed two war verses with cosine similarity of exactly 1.0. That proves the model understands Arabic war poetry perfectly, right?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p class="misconception">Common misconception</p>
+        <p>Assuming that a similarity of 1.0 is evidence of good performance rather than a
+        sign of a bug. Cosine similarity of exactly 1.0 means the two vectors are
+        identical — not just similar, but the same bit-for-bit. Two different sentences
+        cannot produce identical embeddings from a functioning model; they might produce
+        very similar ones, but not equal ones.</p>
+        <p>In this case, the 1.0 was caused by KV cache contamination. llama-cpp-python's
+        <code>embed()</code> doesn't clear the KV cache between sequential calls. The
+        third verse contaminated the fourth verse's computation, causing the model to
+        return the cached state rather than computing a fresh embedding. Every pair
+        involving either verse was meaningless as a result.</p>
+        <p>The fix — passing all inputs as a list in one <code>llm.embed(list)</code>
+        batch call — processes them in a fresh context and eliminates the contamination.
+        The correct interpretation: 1.0 = bug flag, not model capability. This is worth
+        knowing because the bug is silent — nothing crashes, the numbers just look
+        suspiciously clean.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why did you run a sanity check before embedding the full corpus? Couldn't you just embed everything and see if the retrieval works?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Full-corpus embedding on 254k verses takes hours and produces a multi-gigabyte
+        vector store. If the model produces near-constant vectors for Arabic — outputting
+        similar embeddings regardless of input content — you'd discover it only after
+        wasting that time, and you'd need to re-embed from scratch with a different model.</p>
+        <p>A sanity check with 5 carefully chosen verses takes under a minute. If thematically
+        similar verses don't score higher than thematically unrelated ones, the model isn't
+        capturing Arabic semantics and you switch models before committing. If they do, you
+        have empirical evidence — not an assumption — to justify the cost of full indexing.</p>
+        <p>There's no published Arabic-specific benchmark for voyage-4-nano. The sanity check
+        is the benchmark we designed ourselves for this task, in the time it would have taken
+        to write one batch of embedding calls.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="general">
+      <p class="eyebrow"><span class="tag">General</span><span class="num"></span></p>
+      <h2 class="question">Your sanity check showed patience-patience at 0.74, but patience-war at 0.88 — patience scored more similar to war than to itself. Doesn't that mean the model failed?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The patience-war pair ([0]&[2]=0.88) involved verse [2] which was contaminated
+        by the KV cache bug — so that number can't be trusted at all. The valid clean
+        comparisons involving only [0], [1], and [4] showed the right direction:
+        patience-patience (0.74) > patience-love (0.64, 0.57). The model is differentiating.</p>
+        <p>Even setting the bug aside: classical Arabic poetry is all in the same register —
+        high formality, archaic vocabulary, metrical structure. Some baseline similarity
+        between any two classical verses is expected, regardless of theme. What matters is
+        whether there's a gradient between same-theme and different-theme pairs, not whether
+        the absolute scores match intuitions built on English.</p>
+        <p>The re-run with the batch embedding fix is the actual validation. Accepting the
+        first run's contaminated numbers as ground truth would have been the mistake.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">You used Q8_0 quantization. How did you verify it didn't degrade Arabic embedding quality, and what would you do if it did?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The sanity check was the verification step. After fixing a KV cache contamination
+        bug, the raw diagnostic output showed two المتنبي verses producing bit-for-bit
+        identical 1024-dim vectors — cosine similarity 1.0. Since two genuinely different
+        sentences cannot produce the same embedding, this is a quantization collapse:
+        Q8_0 rounded two already-similar representations into the same quantized value.</p>
+        <p>Replacing one المتنبي verse with a verse by عنترة بن شداد (different poet,
+        era, and diction) immediately produced distinct vectors. Conclusion: the collapse
+        is poet-style specific — likely triggered by المتنبي's unusually consistent
+        high-register diction — not a general Arabic failure.</p>
+        <p>If it proved widespread during full-corpus embedding, the fix is straightforward:
+        swap to the F16 GGUF from the same repo. Same loading code, same linear projection
+        file, just a different filename (~695 MB vs ~372 MB). The Q8_0 README claims
+        0.9999 mean cosine similarity to the original — that 0.0001 gap is where collapses
+        live, and for a 254k-verse corpus with المتنبي as the most prolific poet, it's
+        worth monitoring.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">Your sanity check showed المتنبي's patience verse scoring 0.88 with his sword verse — higher than patience-vs-patience (0.74). Doesn't that mean the model is confusing themes?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p class="misconception">Common misconception</p>
+        <p>Assuming embedding similarity equals thematic similarity. Embedding models encode
+        much more than topic — they encode lexical register, syntactic patterns, and for
+        literary corpora, the distinctive voice of individual authors. المتنبي's patience
+        verse and sword verse share diction (rare classical vocabulary), meter (a specific
+        poetic bahrs), and rhetorical stance (the poet asserting dominance over fate/enemies).
+        A hadith about patience shares the theme but nothing else.</p>
+        <p>For this project specifically, authorial signal is a feature. A user querying
+        "شجاعة المتنبي" (المتنبي's courage) should retrieve both his war verses and his
+        stoic-endurance verses — they express the same worldview even if the nominal subject
+        differs. What would be a failure is if love verses clustered with war verses, and
+        they don't: love scored 0.57–0.64 against everything, a consistent gap below the
+        0.73+ in-domain floor. The model is not confused; it's encoding poetry, not Wikipedia
+        categories.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <!-- NEW_QA_INSERTION_POINT: insert new <article class="qa-card"> blocks immediately above this line, in the order the underlying decisions were made. -->
+  </main>
+
+</div>
+
+<script>
+(function () {
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.qa-card'));
+  document.getElementById('q-count').textContent = cards.length;
+  document.getElementById('empty-state').style.display = cards.length ? 'none' : '';
+
+  var labels = { technical: 'Technical Decision', trick: 'Trick Question', general: 'General' };
+  var activeFilter = 'all';
+
+  cards.forEach(function (c, i) {
+    var num = 'Q' + String(i + 1).padStart(3, '0');
+    var numEl = c.querySelector('.num');
+    if (numEl) numEl.textContent = num;
+    c.id = num;
+  });
+
+  var revealBtns = document.querySelectorAll('.reveal-btn');
+  revealBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var answer = btn.nextElementSibling;
+      var hidden = answer.hasAttribute('hidden');
+      if (hidden) {
+        answer.removeAttribute('hidden');
+        btn.textContent = 'Hide answer';
+        btn.setAttribute('aria-expanded', 'true');
+      } else {
+        answer.setAttribute('hidden', '');
+        btn.textContent = 'Show answer';
+        btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  });
+
+  var reviewToggle = document.getElementById('review-toggle');
+  var reviewOnly = false;
+
+  document.querySelectorAll('.rate-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var card = btn.closest('.qa-card');
+      var wantsReview = btn.classList.contains('rate-review');
+      card.setAttribute('data-reviewed', wantsReview ? 'review' : 'good');
+      card.querySelectorAll('.rate-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      if (!reviewToggle.style.display || reviewToggle.style.display === 'none') {
+        reviewToggle.style.display = '';
+      }
+      applyFilter();
+    });
+  });
+
+  reviewToggle.addEventListener('click', function () {
+    reviewOnly = !reviewOnly;
+    reviewToggle.classList.toggle('active', reviewOnly);
+    applyFilter();
+  });
+
+  var filterBar = document.getElementById('filters');
+  var randomBtn = document.getElementById('random-btn');
+
+  function renderFilters() {
+    filterBar.innerHTML = '';
+    var categories = [];
+    cards.forEach(function (c) {
+      var cat = c.getAttribute('data-category');
+      if (categories.indexOf(cat) === -1) categories.push(cat);
+    });
+
+    var all = document.createElement('button');
+    all.type = 'button';
+    all.className = 'chip' + (activeFilter === 'all' ? ' active' : '');
+    all.textContent = 'All (' + cards.length + ')';
+    all.addEventListener('click', function () { activeFilter = 'all'; applyFilter(); renderFilters(); });
+    filterBar.appendChild(all);
+
+    categories.forEach(function (cat) {
+      var count = cards.filter(function (c) { return c.getAttribute('data-category') === cat; }).length;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (activeFilter === cat ? ' active' : '');
+      b.textContent = (labels[cat] || cat) + ' (' + count + ')';
+      b.addEventListener('click', function () { activeFilter = cat; applyFilter(); renderFilters(); });
+      filterBar.appendChild(b);
+    });
+  }
+
+  function applyFilter() {
+    cards.forEach(function (c) {
+      var categoryMatch = activeFilter === 'all' || c.getAttribute('data-category') === activeFilter;
+      var reviewMatch = !reviewOnly || c.getAttribute('data-reviewed') === 'review';
+      c.style.display = (categoryMatch && reviewMatch) ? '' : 'none';
+    });
+  }
+
+  randomBtn.addEventListener('click', function () {
+    var visible = cards.filter(function (c) { return c.style.display !== 'none'; });
+    if (!visible.length) return;
+    document.querySelectorAll('.answer').forEach(function (a) { a.setAttribute('hidden', ''); });
+    revealBtns.forEach(function (b) { b.textContent = 'Show answer'; b.setAttribute('aria-expanded', 'false'); });
+    var pick = visible[Math.floor(Math.random() * visible.length)];
+    pick.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    pick.classList.add('pulse');
+    setTimeout(function () { pick.classList.remove('pulse'); }, 1400);
+  });
+
+  if (!cards.length) {
+    document.querySelector('.controls').style.display = 'none';
+  } else {
+    renderFilters();
+    applyFilter();
+  }
+})();
+</script>
+</body>
+</html>
