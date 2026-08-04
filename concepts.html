@@ -481,7 +481,37 @@
       </div>
     </article>
 
-    <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
+      <div class="concept-card">
+        <h3 class="concept-title">FTS / BM25 (Full Text Search)</h3>
+        <p class="concept-description">While Vector Search finds verses by "meaning," FTS (Full Text Search) finds verses by exact keywords. BM25 is the industry-standard algorithm used inside FTS (like ElasticSearch or LanceDB's Tantivy integration). It ranks results based on how often your search words appear in the verse, adjusting for how rare those words are across the entire dataset (e.g., matching "الخيل" is worth more than matching "في").</p>
+      </div>
+
+      <div class="concept-card">
+        <h3 class="concept-title">IVF_PQ (Inverted File with Product Quantization)</h3>
+        <p class="concept-description">A type of Vector Index used to make searching millions of vectors fast. <strong>IVF (Inverted File)</strong> clusters similar vectors together. In our dataset, we chose <code>num_partitions=256</code>, which runs K-Means to divide the 3.4M verses into 256 clusters (about 13,000 verses each). When searching, the engine only checks the single cluster closest to your query instead of scanning all 3.4 million verses. <strong>PQ (Product Quantization)</strong> compresses the vectors so they fit in RAM. We chose <code>num_sub_vectors=64</code>, which chops each 2048-dimensional vector into 64 chunks and assigns each chunk to a 1-byte lookup table. This compresses our 8-Kilobyte float vectors down to exactly 64 bytes! Together, IVF_PQ drops search latency from 5+ seconds down to milliseconds.</p>
+      </div>
+
+      <div class="concept-card">
+        <h3 class="concept-title">RRF (Reciprocal Rank Fusion)</h3>
+        <p class="concept-description">The magic algorithm behind "Hybrid Search." If Semantic Search ranks a verse #1, and Keyword Search ranks it #3, how do you combine them? RRF assigns a score based on their rank: <code>1 / (constant + rank)</code>. The scores are summed up, and the highest total wins. It ensures that verses matching BOTH the meaning and the exact words rise to the absolute top, outperforming either method alone—<strong>but only if both methods return quality signals.</strong></p>
+      </div>
+
+      <div class="concept-card">
+        <h3 class="concept-title">RAG Components: Retriever vs. Generator (Voyage vs. Qwen)</h3>
+        <p class="concept-description">A full RAG (Retrieval-Augmented Generation) system requires two completely different AI models working together. The <strong>Retriever</strong> (e.g., Voyage-4) is an Embedding Model; it cannot talk, it only converts text into math to find relevant documents in a database. The <strong>Generator</strong> (e.g., Qwen 3.5 9b) is an LLM; it reads the documents the Retriever found and writes a natural language answer for the user. You need both: the Retriever to find the needle in the haystack, and the LLM to explain the needle.</p>
+      </div>
+
+      <div class="concept-card">
+        <h3 class="concept-title">Embedding Anisotropy (The Narrow Cone Problem)</h3>
+        <p class="concept-description">In mathematics, cosine similarity ranges from <code>-1</code> (perfect opposites) to <code>1</code> (identical), with <code>0</code> meaning completely unrelated. However, in modern LLM embeddings, vectors do not spread out evenly. They suffer from "anisotropy," meaning they all cluster into a narrow cone in the high-dimensional space. As a result, two completely unrelated sentences (e.g., "Pride in battle" vs "Eating apples") might have a similarity of <code>0.65</code> instead of <code>0.00</code>. A drop from <code>0.90</code> to <code>0.73</code> might look small, but it actually spans the entire effective dynamic range of the model!</p>
+      </div>
+
+      <div class="concept-card">
+        <h3 class="concept-title">Golden Set & Evaluation Harness</h3>
+        <p class="concept-description">How do you prove a search engine actually works? You build a <strong>Golden Set</strong>. This is a small, hand-crafted JSON file (generated via <code>build_golden_set.py</code>) containing realistic user queries paired with the exact verses they <em>should</em> return. An <strong>Evaluation Harness</strong> (our <code>evaluate.py</code>) then runs every query against the database and calculates metrics like Recall@5. Without this, you are just guessing if your AI is good; with it, you can mathematically prove your AI is good.</p>
+      </div>
+
+      <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
   </main>
 
 </div>

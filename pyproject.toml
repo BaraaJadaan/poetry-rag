@@ -8,8 +8,12 @@ dependencies = [
     "chromadb>=1.5.9",
     "datasets>=5.0.0",
     "huggingface-hub",
+    "lancedb>=0.36.0",
     "llama-cpp-python @ file:///C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl",
+    "pandas>=2.3.3",
+    "pyarrow>=25.0.0",
     "setuptools>=65.0.0,<71",
+    "tantivy>=0.26.0",
     "tqdm>=4.69.0",
 ]
 

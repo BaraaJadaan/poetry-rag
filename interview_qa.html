@@ -623,6 +623,69 @@
       </div>
     </article>
 
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">How did you handle the hard power loss that corrupted the ChromaDB index mid-build? Did you have to write a recovery script?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>No recovery script was needed, and that was by design. The power loss corrupted ChromaDB's local SQLite/pickle backend because a write was interrupted. Instead of trying to perform "open-heart surgery" on the HNSW index files, I simply deleted the entire `chromadb` directory and restarted the embedding script.</p>
+        <p>This was only possible because I designed the pipeline to be fully deterministic. Instead of letting ChromaDB auto-generate random UUIDs, or using fragile positional IDs (like `row_5_verse_2`), every verse's document ID is the first 32 characters of the SHA-256 hash of its normalized text. The script is inherently idempotent.</p>
+        <p>If you build stateful systems assuming they will never crash, you spend hours writing recovery logic when they inevitably do. By making the document IDs deterministic content hashes, the entire vector store became a pure function of the dataset. The "recovery plan" for a corrupted database is just deleting it and letting the pipeline rebuild it.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why did you use LanceDB instead of a more common choice like ChromaDB for your local vector store?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>I actually started with ChromaDB, but I hit its architectural limits during the bulk embed phase. At 2.5 million verses, with a GPU pumping out 256-vector batches (each 2048 dimensions) extremely quickly, ChromaDB's local Rust backend couldn't keep up. It uses a SQLite Write-Ahead Log (WAL) that a background thread has to continuously compact into the actual HNSW binary index.</p>
+        <p>Under heavy write load, that compaction thread fell behind and eventually crashed with a fatal <code>Failed to apply logs to the hnsw segment writer</code> error, corrupting the database.</p>
+        <p>Instead of trying to throttle the GPU to accommodate the database, I swapped the database to LanceDB. LanceDB is designed for this scale—it writes vectors directly to an on-disk columnar format (Lance) without a fragile background WAL compaction loop. It handled the exact same 2.5 million row insert flawlessly and gave me the exact same metadata filtering capabilities I needed for the retrieval phase.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+      <article class="qa-card" data-category="Decision">
+        <div class="qa-header">
+          <span class="qa-category decision">Technical Decision</span>
+        </div>
+        <div class="qa-body">
+          <h3 class="question">In your evaluation harness, Hybrid search (RRF) actually underperformed pure Keyword (BM25) search. Why did you keep it, or what does that metric tell you?</h3>
+          <div class="answer-mask" onclick="this.classList.add('revealed')">
+            <span class="reveal-text">Tap to reveal answer</span>
+            <div class="answer">
+              <p>That was the most interesting finding of the project. Hybrid search blends Semantic and Keyword results using Reciprocal Rank Fusion (RRF). Our metrics showed that our tiny semantic model (Voyage-4-nano) completely collapsed on classical Arabic poetry, essentially acting as random noise.</p>
+              <p>When RRF blends a strong signal (Keyword) with random noise (Semantic), the noise drags the good results down. It empirically proves that Hybrid search isn't magic—it only works if both underlying models are returning high-quality signals. I documented this metric to show I don't just blindly implement algorithms; I measure their actual impact on the dataset.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa-card" data-category="Decision">
+        <div class="qa-header">
+          <span class="qa-category decision">Technical Decision</span>
+        </div>
+        <div class="qa-body">
+          <h3 class="question">How did you debug the 0% Semantic Recall? How did you know it was a pooling issue rather than just a bad model?</h3>
+          <div class="answer-mask" onclick="this.classList.add('revealed')">
+            <span class="reveal-text">Tap to reveal answer</span>
+            <div class="answer">
+              <p>Before re-embedding 3.4 million rows, I wrote a scratch script to test the model's cosine similarity on completely unrelated concepts. I tested our baseline query ("Pride in bravery in battle") against a highly similar verse, against an opposite concept ("Cowardice and running away"), and against an unrelated domain ("I love eating apples").</p>
+              <p>Under CLS pooling, the opposite concept scored exactly the same as the similar verse (0.920). It was entirely blind to meaning. When I switched to Mean Pooling, the model correctly dropped the opposite concept's score to 0.71, and the unrelated domain to 0.63.</p>
+              <p>This also proved my understanding of <strong>Embedding Anisotropy</strong>. The true "floor" of cosine similarity for this model wasn't 0.0, but around 0.63, meaning the vectors are clustered in a narrow cone. A drop from 0.90 to 0.71 is actually a massive semantic penalty, spanning most of the model's effective dynamic range.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
     <!-- NEW_QA_INSERTION_POINT: insert new <article class="qa-card"> blocks immediately above this line, in the order the underlying decisions were made. -->
   </main>
 

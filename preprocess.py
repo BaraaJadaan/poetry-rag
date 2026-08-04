@@ -165,13 +165,14 @@ def build_chunks(row: dict) -> list[dict]:
         # Build the full-verse string for display (keeps *** as visual separator)
         if ajuz is not None:
             display = f"{sadr} *** {ajuz}"
-            # For indexing: join with a plain space — no *** noise for the model.
-            # NOTE: this does NOT reunite words split mid-syllable across the
-            # hemistich boundary (e.g. "الخَل" + "قَ" stays as "الخل ق", not
-            # "الخلق"). For embedding models this is fine (subword tokenization
-            # handles it). For BM25, Arabic-aware tokenization will need to
-            # address this — flagged for that build step.
-            raw_index = f"{sadr} {ajuz}"
+            # For indexing: we need to handle words that were split mid-syllable across the
+            # hemistich boundary (e.g. "الخَل" + "قَ"). If we only join with a space, 
+            # BM25 will index "الخل" and "ق" as separate words, breaking keyword search for "الخلق".
+            # FIX: We include BOTH the spaced version and the unspaced version in the index string.
+            # If the word was split, `sadr+ajuz` reunites it perfectly for BM25. If it wasn't split, 
+            # `sadr+ajuz` creates a nonsense compound word that BM25 will just index harmlessly 
+            # as a rare token nobody will ever search for.
+            raw_index = f"{sadr} {ajuz} {sadr}{ajuz}"
         else:
             display = sadr  # orphan hemistich — one half-line
             raw_index = sadr

@@ -12,4 +12,4 @@ wheels/
 # Database and temp packages
 chromadb/
 .tmp_pkgs/
-
+lancedb/
