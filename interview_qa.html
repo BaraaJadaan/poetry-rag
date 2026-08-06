@@ -686,6 +686,126 @@
         </div>
       </article>
 
+      <article class="qa-card" data-category="Decision">
+        <div class="qa-header">
+          <span class="qa-category decision">Technical Decision</span>
+        </div>
+        <div class="qa-body">
+          <h3 class="question">By using Product Quantization (PQ) to compress 2048 float dimensions down to 64 bytes, aren't you losing search accuracy? Is this a standard practice?</h3>
+          <div class="answer-mask" onclick="this.classList.add('revealed')">
+            <span class="reveal-text">Tap to reveal answer</span>
+            <div class="answer">
+              <p>Yes, PQ is a "lossy compression," so the cosine distances it calculates are approximations. However, IVF_PQ is the absolute industry gold standard (invented by FAISS) and powers every major vector database (Pinecone, LanceDB, Milvus) because the tradeoff is mandatory at scale.</p>
+              <p>To fix the accuracy loss, production systems use a two-step retrieval trick: we use the compressed PQ index in RAM to quickly fetch the top 100 approximate matches. Then, the database automatically loads the uncompressed, exact vectors from the disk for just those 100 rows, recalculates the perfect distance, and gives us the true Top 5. We get the speed of RAM with the accuracy of disk.</p>
+              <p><em>(Note: PQ quantizes the database output vectors, whereas Q4/Q8 GGUF quantizes the neural network's internal brain weights. Same concept of grouping similar numbers into discrete buckets, but applied to different parts of the pipeline!)</em></p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+    <article class="qa-card" data-category="Technical Decision">
+      <h3 class="q">Why did you write a custom native tool calling loop instead of using LangChain or LlamaIndex for your RAG agent?</h3>
+      <div class="a-reveal-trigger" tabindex="0">Reveal Answer</div>
+      <div class="a-content">
+        <p>Because in a production environment, framework abstractions around LLM reasoning often become liabilities. By writing a native loop using the standard OpenAI-compatible API (via <code>llama-cpp-python</code>), I retained complete control over the prompt, the execution state, and the error handling.</p>
+        <p>When LangChain fails to route a query correctly, you have to dig through layers of abstraction to find the hidden prompt that caused it. With a native loop, the <code>while</code> loop is explicit, the JSON schemas are clear, and I can step through it in a debugger. Furthermore, relying purely on the native API makes the architecture significantly lighter and easier to deploy, especially since our core constraint was running fully local and air-gapped.</p>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="Technical Decision">
+      <h3 class="q">How did you handle models that didn't strictly follow the expected JSON function-calling schema?</h3>
+      <div class="a-reveal-trigger" tabindex="0">Reveal Answer</div>
+      <div class="a-content">
+        <p>This was one of the most interesting challenges. I tested an OmniCoder model that was fine-tuned to use Claude's XML syntax (<code>&lt;tool_call&gt;</code>) instead of OpenAI JSON. The standard <code>llama-cpp-python</code> parser completely failed to recognize it.</p>
+        <p>Because I built a native ReAct loop instead of relying on a framework, I had full access to the raw message content. I simply wrote a regex-based fallback parser that intercepts the XML tags, parses the function name and arguments into a standard Python dictionary, and injects it seamlessly into my execution loop. If I had been using LangChain, this would have crashed the entire agent and I would have been forced to change models.</p>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="general">
+      <p class="eyebrow"><span class="tag">General</span><span class="num"></span></p>
+      <h2 class="question">You built this to be a fully local ML project, but your live deployment uses the OpenRouter API. Why the bait and switch?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>It's not a bait and switch; it's a deliberate architectural toggle. The core IP of this project—the semantic chunking, the hybrid LanceDB index, the custom ReAct tool orchestration—is all custom and runs locally. However, running a 9B parameter model on a free-tier cloud CPU generates about 3 tokens per second.</p>
+        <p>In a production environment, you don't punish your users with 15-second wait times just to prove you can host weights yourself. I built the FastAPI backend using the Strategy Pattern so it can seamlessly swap the inference engine. Casual web visitors get routed to the lightning-fast OpenRouter API for a premium UX, while the exact same RAG orchestration can be run locally (or on a cloud GPU) by flipping a single environment variable.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Since you deployed to a cloud server, why did you use `llama.cpp` instead of a production engine like `vLLM`?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because of the deployment hardware constraints. I deployed to Oracle Cloud's "Always Free" tier, which provides a generous 24GB of RAM but uses an ARM Ampere CPU, not a GPU. `vLLM` is an incredible engine for high-throughput serving, but it is deeply tied to CUDA kernels and PagedAttention, meaning it strictly requires a dedicated GPU to be effective.</p>
+        <p>For an ARM CPU, `llama.cpp` is the absolute gold standard. It is heavily optimized for CPU inference using ARM NEON instructions. Choosing `vLLM` would have forced me into paying $30+/month for a dedicated GPU instance. By choosing `llama.cpp`, I achieved a $0/month production deployment while still demonstrating full MLOps capability.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Qwen 3.7 via OpenRouter was dumping both its internal reasoning and the final answer into the thinking drawer. How did you fix that without changing any frontend code?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The root cause was a protocol mismatch. The local model produces tool-call turns that our SSE loop converts into <code>turn_start</code> events, which the frontend uses to route content into either the thinking drawer (turn 0) or the answer area (turn 1). Qwen 3.7 via OpenRouter doesn't use tool-call protocol — it streams plain text and buries its reasoning inside <code>&lt;think&gt;…&lt;/think&gt;</code> tags inline in <code>delta.content</code>. Because the turn index never advanced past 0, everything went into the thinking drawer raw.</p>
+        <p>The fix is a three-state streaming parser in <code>agent.py</code>: <code>before_think → in_think → after_think</code>. It maintains a small lookahead buffer across chunks to safely span tag boundaries (a single chunk might contain only <code>&lt;th</code>, with the rest arriving in the next chunk). Content inside the tags is emitted as turn-0 thinking; on <code>&lt;/think&gt;</code> it emits a <code>turn_start: 1</code> SSE event; everything after goes to the answer area. Zero frontend changes required — the same event protocol was already there.</p>
+        <p>The lesson: any model that isn't native-tool-call will leak its reasoning into the wrong layer unless the backend explicitly parses and splits it. Don't assume all providers use the same streaming contract.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why does switching the backend toggle require a page refresh? Why not swap the model live mid-session?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The conversation history is stored as a flat JavaScript array on the client and sent with every request. If a user switches from the local model to OpenRouter mid-session, the backend receives prior assistant messages that were formatted for a completely different context window and token budget. More importantly, the <code>system</code> prompt and tool schema are injected server-side on the first turn — switching mid-conversation means the new model receives history that was produced under a different system prompt, which is a known cause of reasoning drift and hallucination.</p>
+        <p>A page refresh is the clean architectural solution: it clears the conversation array, re-establishes the correct system prompt for the new backend, and avoids any cross-model context contamination. Rather than silently letting users continue and experience degraded results, we added a pill-shaped glassmorphism toast that slides in from the top with a spring animation (<code>cubic-bezier(0.34, 1.56, 0.64, 1)</code>), names the target backend, and surfaces an inline "تحديث الآن" button wired to <code>location.reload()</code>. It auto-dismisses after six seconds. The UX is transparent and actionable rather than surprising.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">How did you implement conversation persistence across reloads without polluting the LLM's context window with its own past reasoning?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>I used <code>localStorage</code> to cache the last 10 turns so the user doesn't lose their history on reload. However, the naive approach—pushing those cached messages directly back into the <code>conversation</code> array—caused severe context pollution. The model started reading its own previous tool calls and internal chain-of-thought as if they were part of the current prompt.</p>
+        <p>The fix was to decouple the <em>visual</em> state from the <em>execution</em> state. When the page loads, the frontend parses the cached JSON and dynamically creates the DOM elements to render the history visually on screen. But crucially, it leaves the underlying <code>conversation</code> array completely empty. This ensures the user gets a seamless visual experience, while every new chat session starts with a pristine context window and a fresh system prompt.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">The local model got stuck in an infinite loop calling the same search tool over and over. Why did this happen and how did you break it?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>This happened because I passed sampling parameters (like temperature=0.7) to the local OmniCoder model, making it more creative. In the first pass, it successfully generated the XML tool call <code>&lt;function=search_verses&gt;</code>. The server executed the tool and appended the result to the chat history.</p>
+        <p>However, in the second pass, the uncensored model saw its own previous XML tool call in the context window and hallucinated that it needed to output the same XML string again, triggering an infinite loop of repeated tool executions. I fixed this using two guardrails: First, I added strict <code>stop=["&lt;/tool_call&gt;", "&lt;/function&gt;"]</code> sequences to the inference engine to physically cut off generation the millisecond a tool call completes. Second, I dynamically injected a strict system warning (<em>"Do not call the tool again, just provide the answer"</em>) directly into the tool result prompt. This completely locked the model into the correct ReAct pattern.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
     <!-- NEW_QA_INSERTION_POINT: insert new <article class="qa-card"> blocks immediately above this line, in the order the underlying decisions were made. -->
   </main>
 

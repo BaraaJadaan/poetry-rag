@@ -13,3 +13,18 @@ wheels/
 chromadb/
 .tmp_pkgs/
 lancedb/
+poetry.db
+
+# Large models
+*.gguf
+models/
+*.pt
+
+# Environment Variables
+.env
+.env.*
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store

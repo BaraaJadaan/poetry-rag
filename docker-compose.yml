@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      # Use named volumes to persist data across container restarts
+      - lancedb_data:/app/lancedb
+      - model_data:/app/models
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # Cloudflare Tunnel to expose the web service securely without opening firewall ports
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --url http://web:8000 --no-autoupdate
+    restart: unless-stopped
+    depends_on:
+      - web
+
+volumes:
+  lancedb_data:
+  model_data:

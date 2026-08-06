@@ -511,7 +511,85 @@
         <p class="concept-description">How do you prove a search engine actually works? You build a <strong>Golden Set</strong>. This is a small, hand-crafted JSON file (generated via <code>build_golden_set.py</code>) containing realistic user queries paired with the exact verses they <em>should</em> return. An <strong>Evaluation Harness</strong> (our <code>evaluate.py</code>) then runs every query against the database and calculates metrics like Recall@5. Without this, you are just guessing if your AI is good; with it, you can mathematically prove your AI is good.</p>
       </div>
 
-      <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
+      <article class="entry">
+      <div class="entry-header">
+        <h3 class="term">Native Tool Calling (ReAct Loop)</h3>
+      </div>
+      <div class="entry-body">
+        <p>A technique where an LLM is given a JSON Schema describing Python functions (tools) it can call, but the application code retains full control of the execution loop. Instead of relying on a black-box framework like LangChain, the application receives a <code>tool_calls</code> request from the LLM, executes the local Python function, and returns the result to the LLM via a <code>tool</code> message role. This allows for fully transparent, debuggable agent behavior without framework bloat.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Deployment Architecture">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Deployment Architecture</p>
+      <h2 class="term">Dual-Toggle LLM Architecture (Strategy Pattern)</h2>
+      <p class="explain">
+        A backend design where the core orchestration logic (the RAG pipeline and tool calling) is fully decoupled from the underlying LLM inference engine. The application reads an environment variable (or a UI toggle) to route the final generation request to either a local model (via <code>llama-cpp-python</code>) or a remote API (like OpenRouter). The business logic remains identical; only the text-generation executor changes.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>For a portfolio project, relying purely on a third-party API hides your MLOps capability, while relying purely on a local model running on a free-tier CPU results in painfully slow responses (2-5 tokens/sec). By implementing both and switching between them seamlessly, we provide instant responses to casual web visitors via the API, while keeping the local pathway intact to prove technical competence to recruiters.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Deployment Architecture">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Deployment Architecture</p>
+      <h2 class="term">Server-Sent Events (SSE) / Streaming</h2>
+      <p class="explain">
+        A unidirectional communication protocol where a web server pushes data chunks to a client over a single HTTP connection as soon as they are available, rather than waiting for the entire response to finish generating. In LLM applications, this is what allows text to appear word-by-word on the screen.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>If the local model (running on an ARM CPU) takes 15 seconds to generate a complete verse explanation, making the user stare at a loading spinner for 15 seconds is a catastrophic UX failure. By streaming the tokens via SSE, the perceived latency drops to under a second, keeping the user engaged while the CPU finishes the work.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Frontend / API">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Frontend / API</p>
+      <h2 class="term">Streaming Tag-Aware Parser (Lookahead Buffer)</h2>
+      <p class="explain">
+        When a model streams text that embeds control tags (like <code>&lt;think&gt;…&lt;/think&gt;</code>)
+        directly inside its token output, a naive chunk-by-chunk processor will fail: a single
+        chunk may arrive as <code>&lt;th</code>, with <code>ink&gt;</code> in the next chunk. A
+        tag-aware parser solves this by maintaining a small lookahead buffer — it withholds the
+        last <em>N–1</em> characters of each chunk (where N is the length of the longest tag you're
+        watching for) and only emits bytes it's certain are not part of an opening or closing tag.
+        The full parser advances through well-defined states (<code>before_tag → in_tag →
+        after_tag</code>), emitting different SSE events for each region so downstream consumers
+        can route the content to the right place without any knowledge of tags at all.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Qwen 3.7 via OpenRouter streams its chain-of-thought reasoning inside
+        <code>&lt;think&gt;</code> tags embedded in plain <code>delta.content</code> — not as a
+        separate token stream or a structured field. Without the parser, everything (reasoning
+        <em>and</em> the final answer) fell into the thinking drawer as raw text. The state
+        machine routes thinking content to the SSE <code>turn_start: 0</code> channel and the
+        answer to <code>turn_start: 1</code> with zero frontend changes, because the
+        <code>turn_start</code> event protocol was already the contract both sides agreed on.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Post-hoc split (buffer everything, then split)</p>
+        <p>Buffering the full response and splitting after it completes works, but it destroys
+        streaming — the user stares at a blank screen until the model finishes. The lookahead
+        approach adds less than one token of latency while keeping real-time character-by-character
+        rendering intact.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.2">
+      <p class="eyebrow">Concept <span class="num"></span></p>
+      <h2 class="term">PEP-508 Environment Markers</h2>
+      <p class="explain">
+        When a project relies on OS-specific or architecture-specific dependencies (like a pre-compiled Windows wheel for a local GPU, but a source-compiled binary for an ARM cloud server), standard `requirements.txt` approaches fail. PEP-508 Environment Markers allow a single `pyproject.toml` to define conditional dependencies based on the host system evaluating the file at install time. 
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The local development environment used a hardcoded Windows `.whl` file for `llama-cpp-python` to avoid compiling C++ on Windows. But when Dockerizing the app for an Oracle ARM (Linux) server, `uv` crashed because that path didn't exist in the container. By adding `sys_platform != 'win32'` and `sys_platform == 'win32'` markers to `pyproject.toml`, the exact same lockfile cleanly fetches from PyPI on the cloud and local disk on Windows.</p>
+      </div>
+    </article>
+
+    <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
   </main>
 
 </div>

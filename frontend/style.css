@@ -1,0 +1,435 @@
+@font-face {
+    font-family: 'Thmanyah';
+    src: url('https://framerusercontent.com/assets/x6EBzvXf1Fi35XhsRoHxePDVo.woff2') format('woff2');
+    font-display: swap;
+    font-style: normal;
+    font-weight: 400;
+}
+
+@font-face {
+    font-family: 'Thmanyah';
+    src: url('https://framerusercontent.com/assets/oE98mOPE28KTzUeptOLRIaqW1I.woff2') format('woff2');
+    font-display: swap;
+    font-style: normal;
+    font-weight: 500;
+}
+
+@font-face {
+    font-family: 'Thmanyah';
+    src: url('https://framerusercontent.com/assets/LZvgFRUsP7pGWYj3tKxMUrKuhSY.woff2') format('woff2');
+    font-display: swap;
+    font-style: normal;
+    font-weight: 700;
+}
+
+:root {
+    --bg-color: #0f172a;
+    --text-color: #f8fafc;
+    --glass-bg: rgba(30, 41, 59, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --primary: #3b82f6;
+    --user-msg: rgba(59, 130, 246, 0.2);
+    --bot-msg: rgba(30, 41, 59, 0.4);
+    --thinking-bg: rgba(0, 0, 0, 0.2);
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Thmanyah', sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;   /* grows with content; page scrolls */
+}
+
+
+.glass-header {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+    padding: 0.75rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.glass-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-feature-settings: "salt" 1, "ss01" 1, "ss02" 1, "swsh" 1, "cswh" 1, "jalt" 1;
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    direction: ltr;
+}
+
+#clear-cache-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.5);
+    border-radius: 0.5rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: normal;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    white-space: nowrap;
+}
+#clear-cache-btn:hover {
+    border-color: #f87171;
+    color: #f87171;
+    opacity: 1;
+}
+
+
+#chat-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 900px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 1rem 1rem 2rem;
+    box-sizing: border-box;
+    /* no overflow:hidden — let the page scroll */
+}
+
+
+#messages {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    /* no overflow-y:auto — the html element scrolls instead */
+    min-height: 60vh;  /* keeps layout stable when empty */
+}
+
+
+.message {
+    padding: 1rem;
+    border-radius: 0.5rem;
+    max-width: 85%;
+    line-height: 1.6;
+    border: 1px solid var(--glass-border);
+}
+
+.message.user {
+    background: var(--user-msg);
+    align-self: flex-start;
+    border-start-end-radius: 0;
+}
+
+.message.assistant {
+    background: var(--bot-msg);
+    align-self: flex-end;
+    border-start-start-radius: 0;
+}
+
+.thinking-drawer {
+    background: var(--thinking-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+}
+
+.thinking-header {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    opacity: 0.8;
+    user-select: none;
+}
+
+.thinking-header .chevron {
+    margin-right: auto;
+    transition: transform 0.2s;
+}
+
+.thinking-content:not(.open) ~ .thinking-header .chevron,
+.thinking-drawer:has(.thinking-content:not(.open)) .chevron {
+    transform: rotate(-90deg);
+}
+
+.thinking-header:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.thinking-content {
+    padding: 0.5rem 1rem;
+    font-family: monospace;
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    direction: ltr; /* XML is always LTR */
+    text-align: left;
+    color: #94a3b8;
+    border-top: 1px solid var(--glass-border);
+    display: none;
+}
+
+.thinking-content.open {
+    display: block;
+}
+
+.input-area {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    border-radius: 0.75rem;
+    padding: 0.3rem 0.5rem;
+    position: sticky;
+    bottom: 0.75rem;
+    z-index: 10;
+}
+
+
+textarea {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-color);
+    font-family: 'Thmanyah', sans-serif;
+    font-size: 1rem;
+    resize: none;
+    padding: 0.35rem 0.5rem;
+    outline: none;
+    min-height: 34px;
+    max-height: 160px;
+    overflow-y: auto;
+    line-height: 1.5;
+    align-self: center;
+}
+
+
+button {
+    display: block;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 0.5rem;
+    padding: 0 1.5rem;
+    font-family: 'Thmanyah', sans-serif;
+    font-weight: bold;
+    cursor: pointer;
+    transition: opacity 0.2s, background 0.2s;
+    white-space: nowrap;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#stop-btn {
+    background: #ef4444;
+}
+
+/* Send / Stop buttons — explicitly slim so they don't stretch the input bar */
+#send-btn, #stop-btn {
+    align-self: center;
+    height: 2rem;
+    padding: 0 1.25rem;
+    font-size: 0.9rem;
+}
+
+
+/* Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #334155;
+  transition: .4s;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+}
+input:checked + .slider {
+  background-color: var(--primary);
+}
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+.slider.round {
+  border-radius: 24px;
+}
+.slider.round:before {
+  border-radius: 50%;
+}
+.toggle-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    direction: ltr;
+}
+
+/* Markdown Styles */
+.markdown-body {
+    line-height: 1.6;
+}
+.markdown-body p:first-child { margin-top: 0; }
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body h1, .markdown-body h2, .markdown-body h3 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary);
+}
+.markdown-body blockquote {
+    border-right: 4px solid var(--primary);
+    border-left: none;
+    margin: 0.5rem 0;
+    padding: 0.5rem 1rem 0.5rem 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 0.25rem;
+}
+.markdown-body strong {
+    color: #cbd5e1;
+}
+.markdown-body pre {
+    direction: ltr;
+    text-align: left;
+    background: rgba(0,0,0,0.3);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+}
+
+/* Scrollbar — on the html element so it sits at the right edge of the viewport */
+html::-webkit-scrollbar {
+    width: 6px;
+}
+html::-webkit-scrollbar-track {
+    background: transparent;
+}
+html::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+}
+html::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+html {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.18) transparent;
+}
+
+.stop-note {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: #f87171;
+    opacity: 0.8;
+}
+
+/* Cache history divider */
+.cache-divider {
+    text-align: center;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.25);
+    letter-spacing: 0.08em;
+    padding: 0.25rem 0;
+    user-select: none;
+}
+
+
+/* Refresh Toast */
+@keyframes toastSlideIn {
+    from { transform: translateY(-120%) scale(0.95); opacity: 0; }
+    to   { transform: translateY(0)       scale(1);    opacity: 1; }
+}
+@keyframes toastSlideOut {
+    from { transform: translateY(0)       scale(1);    opacity: 1; }
+    to   { transform: translateY(-120%) scale(0.95); opacity: 0; }
+}
+
+#refresh-toast {
+    position: fixed;
+    top: 1.25rem;
+    /* direction-agnostic centering: unaffected by dir=rtl and by the
+       translateY animation (which would overwrite a static translateX) */
+    left: 0;
+    right: 0;
+    margin-left: auto;
+    margin-right: auto;
+    width: fit-content;
+    max-width: calc(100vw - 2rem);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(16px);
+    border: 1px solid rgba(59, 130, 246, 0.4);
+    border-radius: 999px;
+    padding: 0.6rem 1.25rem 0.6rem 1rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.05);
+    font-size: 0.9rem;
+    color: #e2e8f0;
+    white-space: nowrap;
+    pointer-events: none;
+    animation: toastSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+
+#refresh-toast.hide {
+    animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+#refresh-toast .toast-icon {
+    font-size: 1.1rem;
+}
+
+#refresh-toast .toast-refresh-btn {
+    pointer-events: all;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 999px;
+    padding: 0.25rem 0.85rem;
+    font-family: 'Thmanyah', sans-serif;
+    font-size: 0.82rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    margin-inline-start: 0.25rem;
+}
+
+#refresh-toast .toast-refresh-btn:hover {
+    opacity: 0.85;
+}
