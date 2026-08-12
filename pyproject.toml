@@ -10,8 +10,6 @@ dependencies = [
     "fastapi>=0.141.1",
     "huggingface-hub",
     "lancedb>=0.36.0",
-    "llama-cpp-python>=0.3.34 ; sys_platform != 'win32'",
-    "llama-cpp-python @ file:///C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl ; sys_platform == 'win32'",
     "openai>=2.53.0",
     "pandas>=2.3.3",
     "pyarrow>=25.0.0",
@@ -21,6 +19,12 @@ dependencies = [
     "tantivy>=0.26.0",
     "tqdm>=4.69.0",
     "uvicorn>=0.52.1",
+]
+
+[project.optional-dependencies]
+local-llm = [
+    "llama-cpp-python>=0.3.34 ; sys_platform != 'win32'",
+    "llama-cpp-python @ file:///C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl ; sys_platform == 'win32'",
 ]
 
 [dependency-groups]

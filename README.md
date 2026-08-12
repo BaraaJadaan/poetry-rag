@@ -25,6 +25,15 @@ uv sync
 ```
 *(Or with standard pip: `pip install -e .`)*
 
+If you want to run the local GGUF LLM on Windows, install the optional local extra:
+
+```bash
+uv sync --extra local-llm
+```
+
+The default install is enough for CI, cloud/API mode, retrieval evaluation, and the
+Oracle deployment.
+
 ### 4. Track Retrieval Experiments
 MLflow is kept in a separate dependency group because it is needed for evaluation
 experiments, not for the FastAPI serving image:

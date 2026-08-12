@@ -3,7 +3,6 @@ import sys
 import os
 import asyncio
 import re
-from llama_cpp import Llama
 from retriever import HybridRetriever
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -14,20 +13,23 @@ AGENT_MODEL_PATH = os.getenv("AGENT_MODEL_PATH", "./models/Qwen3.5-2B-MTP-Q4_K_M
 print("Initializing Retriever...")
 retriever = HybridRetriever()
 
-print(f"\nLoading Agent Model ({AGENT_MODEL_PATH})...")
-try:
-    # We load the agent model with chat formatting for Qwen
-    llm = Llama(
-        model_path=AGENT_MODEL_PATH,
-        n_ctx=4096,      # Context window for conversation and retrieved verses
-        n_gpu_layers=-1, # Offload everything to GPU if available
-        verbose=False
-        # Removed hardcoded chat_format="qwen" so llama.cpp auto-detects the correct format for OmniCoder
-    )
-except Exception as e:
-    print(f"Warning: Could not load Agent Model at {AGENT_MODEL_PATH}.")
-    print("Please update AGENT_MODEL_PATH to point to your Qwen GGUF file.")
-    llm = None
+llm = None
+if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
+    print(f"\nLoading Agent Model ({AGENT_MODEL_PATH})...")
+    try:
+        from llama_cpp import Llama
+
+        # Load the local model only in local mode. Cloud mode uses OpenRouter and
+        # should not require the platform-specific llama-cpp-python package.
+        llm = Llama(
+            model_path=AGENT_MODEL_PATH,
+            n_ctx=4096,
+            n_gpu_layers=-1,
+            verbose=False
+        )
+    except Exception as e:
+        print(f"Warning: Could not load Agent Model at {AGENT_MODEL_PATH}: {e}")
+        print("Install the local-llm extra and provide a local GGUF file for local mode.")
 
 
 # ── Tool Definitions (Python Functions) ───────────────────────────────────────
