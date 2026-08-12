@@ -13,10 +13,19 @@ const TOGGLE_KEY  = 'poetry_rag_backend';  // 'local' | 'openrouter'
 
 marked.setOptions({ breaks: true, gfm: true });
 
-// ── Restore toggle preference ─────────────────────────────────────────────────
-(function restoreToggle() {
-    if (localStorage.getItem(TOGGLE_KEY) === 'openrouter') backendToggle.checked = true;
-})();
+// ── Fetch Server Config ───────────────────────────────────────────────────────
+fetch('/config').then(res => res.json()).then(config => {
+    if (config.cloud_deployment) {
+        const toggleContainer = document.querySelector('.toggle-container');
+        if (toggleContainer) {
+            toggleContainer.innerHTML = '<span></span>';
+        }
+        backendToggle.checked = true; // Force true internally
+    } else {
+        // Only restore from localStorage if NOT in cloud deployment
+        if (localStorage.getItem(TOGGLE_KEY) === 'openrouter') backendToggle.checked = true;
+    }
+}).catch(console.error);
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 function saveToCache(userText, answerText, thinkingText) {

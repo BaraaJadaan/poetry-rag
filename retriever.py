@@ -27,28 +27,45 @@ if hasattr(sys.stdout, "reconfigure"):
 
 # ── Config ────────────────────────────────────────────────────────────────────
 LANCE_DIR = "./lancedb"
-TABLE_NAME = "ashaar_baits"
+import os
+from openai import OpenAI
+import zipfile
+import numpy as np
+import pandas as pd
+from huggingface_hub import hf_hub_download
+from dotenv import load_dotenv
+
+load_dotenv()
+
+USE_OPENROUTER_EMBED = os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true"
+TABLE_NAME = "ashaar_baits_qwen3" if USE_OPENROUTER_EMBED else "ashaar_baits"
 GGUF_REPO = "jsonMartin/voyage-4-nano-gguf"
 
 
 class HybridRetriever:
-    def __init__(self):
+    def __init__(self, lance_dir: str = None, table_name: str = None,
+                 query_embedder=None, ensure_fts: bool = True):
         print("Initializing HybridRetriever...")
-        self.db = lancedb.connect(LANCE_DIR)
+        self.query_embedder = query_embedder
+        self.db = lancedb.connect(lance_dir or LANCE_DIR)
+        requested_table = table_name or TABLE_NAME
+        self.table_name = requested_table
         
         try:
-            self.tbl = self.db.open_table(TABLE_NAME)
+            self.tbl = self.db.open_table(requested_table)
         except Exception:
-            print(f"ERROR: Could not open LanceDB table '{TABLE_NAME}'. Did you run embed_corpus.py?")
+            print(f"ERROR: Could not open LanceDB table '{requested_table}'. Did you run embed_corpus.py?")
             sys.exit(1)
             
         print(f"Connected to LanceDB. Table size: {len(self.tbl):,} verses.")
         
         # Ensure FTS index exists
-        self._ensure_fts_index()
+        if ensure_fts:
+            self._ensure_fts_index()
         
         # Load embedding model
-        self._load_model()
+        if self.query_embedder is None:
+            self._load_model()
         
     def _ensure_fts_index(self):
         """Creates the Tantivy full-text search index if it doesn't exist."""
@@ -67,44 +84,75 @@ class HybridRetriever:
             print("FTS index built successfully.")
 
     def _load_model(self):
-        """Loads voyage-4-nano GGUF and the linear projection layer."""
-        print("Loading local embedding model...")
-        gguf_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-q8_0.gguf")
-        linear_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-linear.pt")
-        
-        # Load linear projection without PyTorch
-        with zipfile.ZipFile(linear_path, "r") as zf:
-            data_file = next(n for n in zf.namelist() if n.endswith("data/0"))
-            with zf.open(data_file) as f:
-                raw = f.read()
-        self.linear_weight = np.frombuffer(raw, dtype=np.float16).reshape(2048, 1024).astype(np.float32)
-        
-        # Add Torch DLL path for Llama-cpp if ComfyUI is installed locally
-        try:
-            os.add_dll_directory(r"D:\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\.venv\Lib\site-packages\torch\lib")
-        except Exception:
-            pass
+        if USE_OPENROUTER_EMBED:
+            """Initializes the OpenAI client pointing to OpenRouter for Qwen3 embeddings."""
+            print("Initializing OpenRouter embedding client...")
+            api_key = os.getenv("opentouter_api", "").strip().strip("'\"")
+            if not api_key:
+                print("WARNING: opentouter_api environment variable not found. Semantic search will fail.")
             
-        from llama_cpp import Llama
-        self.llm = Llama(
-            model_path=gguf_path,
-            embedding=True,
-            pooling_type=1, # Mean Pooling
-            n_ctx=512,
-            verbose=False,
-        )
-        print("Model loaded and ready.")
+            self.client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+            )
+            print("API client ready.")
+        else:
+            """Loads voyage-4-nano GGUF and the linear projection layer."""
+            print("Loading local embedding model...")
+            gguf_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-q8_0.gguf")
+            linear_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-linear.pt")
+            
+            # Load linear projection without PyTorch
+            with zipfile.ZipFile(linear_path, "r") as zf:
+                data_file = next(n for n in zf.namelist() if n.endswith("data/0"))
+                with zf.open(data_file) as f:
+                    raw = f.read()
+            self.linear_weight = np.frombuffer(raw, dtype=np.float16).reshape(2048, 1024).astype(np.float32)
+            
+            # Add Torch DLL path for Llama-cpp if ComfyUI is installed locally
+            try:
+                os.add_dll_directory(r"D:\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\.venv\Lib\site-packages\torch\lib")
+            except Exception:
+                pass
+                
+            from llama_cpp import Llama
+            self.llm = Llama(
+                model_path=gguf_path,
+                embedding=True,
+                pooling_type=1, # Mean Pooling
+                n_ctx=512,
+                verbose=False,
+            )
+            print("Model loaded and ready.")
 
     def embed_query(self, text: str) -> np.ndarray:
-        """Embeds a single search query."""
-        raw_outputs = self.llm.embed([text])
-        if raw_outputs and not isinstance(raw_outputs[0], (list, tuple)):
-            raw_outputs = [raw_outputs]
-            
-        vec = np.array(raw_outputs[0], dtype=np.float32)
-        proj = vec @ self.linear_weight.T
-        norm = np.linalg.norm(proj)
-        return proj / norm if norm > 0 else proj
+        if self.query_embedder is not None:
+            return np.asarray(self.query_embedder(text), dtype=np.float32)
+
+        if USE_OPENROUTER_EMBED:
+            """Embeds a single search query using OpenRouter."""
+            try:
+                response = self.client.embeddings.create(
+                    input=[text],
+                    model="qwen/qwen3-embedding-8b"
+                )
+                vec = np.array(response.data[0].embedding, dtype=np.float32)
+                norm = np.linalg.norm(vec)
+                return vec / norm if norm > 0 else vec
+            except Exception as e:
+                print(f"Error embedding query: {e}")
+                # Fallback to zero vector so the program doesn't crash completely
+                return np.zeros(4096, dtype=np.float32)
+        else:
+            """Embeds a single search query using local Voyage model."""
+            raw_outputs = self.llm.embed([text])
+            if raw_outputs and not isinstance(raw_outputs[0], (list, tuple)):
+                raw_outputs = [raw_outputs]
+                
+            vec = np.array(raw_outputs[0], dtype=np.float32)
+            proj = vec @ self.linear_weight.T
+            norm = np.linalg.norm(proj)
+            return proj / norm if norm > 0 else proj
 
     def search_semantic(self, query: str, limit: int = 10, filter_sql: str = None) -> pd.DataFrame:
         """Finds verses with similar semantic meaning using vector similarity."""

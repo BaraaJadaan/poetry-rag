@@ -1,0 +1,24 @@
+# Version control and local development
+.git
+.gitignore
+.venv
+.tmp_pkgs
+__pycache__
+*.py[cod]
+
+# Local/generated data — cloud data is stored in a persistent Docker volume
+lancedb/
+chromadb/
+models/
+poetry.db
+*.gguf
+*.pt
+
+# Secrets and local configuration
+.env
+.env.*
+
+# Local analysis artifacts
+explore.ipynb
+data_report.html
+

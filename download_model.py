@@ -1,8 +1,8 @@
 import os
 from huggingface_hub import hf_hub_download
 
-MODEL_REPO = "brxce/OmniCoder-Claude-uncensored-V2-GGUF"
-MODEL_FILE = "OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf"
+MODEL_REPO = "unsloth/Qwen3.5-2B-MTP-GGUF"
+MODEL_FILE = "Qwen3.5-2B-MTP-Q4_K_M.gguf"
 
 if not os.path.exists("models"):
     os.makedirs("models")

@@ -24,6 +24,10 @@ models/
 .env
 .env.*
 
+# Local experiment tracking and reports
+mlruns/
+evaluation_results*.json
+
 # IDEs and OS
 .vscode/
 .idea/

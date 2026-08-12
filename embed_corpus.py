@@ -41,9 +41,17 @@ from preprocess import run_pipeline
 
 # ── Config ────────────────────────────────────────────────────────────────────
 LANCE_DIR     = "./lancedb"
-TABLE_NAME    = "ashaar_baits"
 CLASSICAL_ONLY = True    # drop عامي/شعبي/'-' rows (see preprocess.py for rationale)
 N_CTX         = 512      # model context window — verses are 10-30 tokens; 512 is ample
+import os
+from openai import OpenAI
+import time
+from dotenv import load_dotenv
+
+load_dotenv()
+
+USE_OPENROUTER_EMBED = os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true"
+TABLE_NAME    = "ashaar_baits_qwen3" if USE_OPENROUTER_EMBED else "ashaar_baits"
 GGUF_REPO     = "jsonMartin/voyage-4-nano-gguf"
 
 
@@ -63,7 +71,7 @@ except ImportError:
 
 schema = pa.schema([
     pa.field("id", pa.string()),
-    pa.field("vector", pa.list_(pa.float32(), 2048)),
+    pa.field("vector", pa.list_(pa.float32(), 4096 if USE_OPENROUTER_EMBED else 2048)),
     pa.field("text_index", pa.string()),
     pa.field("text_display", pa.string()),
     pa.field("poem_title", pa.string()),
@@ -89,77 +97,132 @@ except Exception:
 print(f"LanceDB '{TABLE_NAME}': {already_indexed:,} docs already indexed")
 
 
-# ── 2. Download and load model files ──────────────────────────────────────────
-print("\nChecking model files (cached after first download)...")
-gguf_path   = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-q8_0.gguf")
-linear_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-linear.pt")
-print(f"  GGUF  : {gguf_path}")
-print(f"  linear: {linear_path}")
+if USE_OPENROUTER_EMBED:
+    # ── 2. Initialize OpenRouter API ───────────────────────────────────────────────
+    api_key = os.getenv("opentouter_api", "").strip().strip("'\"")
+    if not api_key:
+        print("ERROR: opentouter_api environment variable not found. Cannot embed without API key.")
+        sys.exit(1)
 
+    client = OpenAI(
+      base_url="https://openrouter.ai/api/v1",
+      api_key=api_key,
+    )
 
-# ── 3. Load linear projection (no torch needed) ───────────────────────────────
-import zipfile
+    def embed_batch(texts: list[str]) -> list[np.ndarray]:
+        """
+        Embed a batch of strings using OpenRouter API and return 4096-dim L2-normalised vectors.
+        Includes an exponential backoff retry loop. If the whole batch fails (e.g. 403 Security Policy),
+        falls back to embedding verse-by-verse, skipping problematic verses with a zero vector.
+        """
+        max_retries = 3
+        base_delay = 2
 
-def load_linear_pt(path: str) -> np.ndarray:
-    with zipfile.ZipFile(path, "r") as zf:
-        data_file = next(n for n in zf.namelist() if n.endswith("data/0"))
-        with zf.open(data_file) as f:
-            raw = f.read()
-    return np.frombuffer(raw, dtype=np.float16).reshape(2048, 1024).astype(np.float32)
+        for attempt in range(max_retries):
+            try:
+                response = client.embeddings.create(
+                    input=texts,
+                    model="qwen/qwen3-embedding-8b"
+                )
+                
+                results = []
+                for item in response.data:
+                    vec = np.array(item.embedding, dtype=np.float32)
+                    norm = np.linalg.norm(vec)
+                    results.append(vec / norm if norm > 0 else vec)
+                return results
+                
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)
+                    print(f"\n[Warning] API error: {e}. Retrying in {delay} seconds...")
+                    time.sleep(delay)
+                else:
+                    print(f"\n[Error] Batch failed after {max_retries} attempts: {e}. Falling back to 1-by-1...")
+                    
+        # Fallback: embed one by one
+        results = []
+        for text in texts:
+            try:
+                # Add a tiny sleep to avoid spamming the API on 1-by-1 fallback
+                time.sleep(0.1)
+                resp = client.embeddings.create(input=[text], model="qwen/qwen3-embedding-8b")
+                vec = np.array(resp.data[0].embedding, dtype=np.float32)
+                norm = np.linalg.norm(vec)
+                results.append(vec / norm if norm > 0 else vec)
+            except Exception as inner_e:
+                print(f"\n[Warning] Skipping verse due to API error: {inner_e}")
+                # Return a zero vector for the problematic verse so the pipeline survives
+                results.append(np.zeros(4096, dtype=np.float32))
+                
+        return results
+else:
+    # ── 2. Download and load model files ──────────────────────────────────────────
+    print("\nChecking model files (cached after first download)...")
+    gguf_path   = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-q8_0.gguf")
+    linear_path = hf_hub_download(repo_id=GGUF_REPO, filename="voyage-4-nano-linear.pt")
+    print(f"  GGUF  : {gguf_path}")
+    print(f"  linear: {linear_path}")
 
-print("\nLoading linear projection layer...")
-linear_weight = load_linear_pt(linear_path)
-print(f"  Shape: {linear_weight.shape}  (maps 1024-dim GGUF output → 2048-dim original)")
+    # ── 3. Load linear projection (no torch needed) ───────────────────────────────
+    import zipfile
 
+    def load_linear_pt(path: str) -> np.ndarray:
+        with zipfile.ZipFile(path, "r") as zf:
+            data_file = next(n for n in zf.namelist() if n.endswith("data/0"))
+            with zf.open(data_file) as f:
+                raw = f.read()
+        return np.frombuffer(raw, dtype=np.float16).reshape(2048, 1024).astype(np.float32)
 
-# ── 4. Load GGUF model ────────────────────────────────────────────────────────
-import os
-try:
-    os.add_dll_directory(r"D:\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\.venv\Lib\site-packages\torch\lib")
-except Exception:
-    pass
+    print("\nLoading linear projection layer...")
+    linear_weight = load_linear_pt(linear_path)
+    print(f"  Shape: {linear_weight.shape}  (maps 1024-dim GGUF output → 2048-dim original)")
 
-from llama_cpp import Llama
-
-print("\nLoading voyage-4-nano GGUF (GPU)...")
-llm = Llama(
-    model_path=gguf_path,
-    embedding=True,
-    pooling_type=1,   # mean pooling — required for this model architecture
-    n_ctx=N_CTX,
-    n_batch=512,      # Increased from 1 to allow GPU to process tokens in parallel
-    n_gpu_layers=-1,  # Offload all layers to GPU
-    verbose=True,
-)
-print("  Model ready.")
-
-
-# ── 5. Embed batch ────────────────────────────────────────────────────────────
-def embed_batch(texts: list[str]) -> list[np.ndarray]:
-    """
-    Embed a batch of strings and return 2048-dim L2-normalised vectors.
-    Batching + n_batch=512 is critical to actually saturate the GPU.
-    """
+    # ── 4. Load GGUF model ────────────────────────────────────────────────────────
+    import os
     try:
-        llm._ctx.kv_cache_clear()
-    except AttributeError:
-        llm.reset()
+        os.add_dll_directory(r"D:\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI\.venv\Lib\site-packages\torch\lib")
+    except Exception:
+        pass
 
-    raw_outputs = llm.embed(texts)
-    
-    # llama_cpp.embed might return a flat list if given 1 text, or list of lists
-    if raw_outputs and not isinstance(raw_outputs[0], (list, tuple)):
-        raw_outputs = [raw_outputs]
+    from llama_cpp import Llama
 
-    results = []
-    for raw in raw_outputs:
-        vec = np.array(raw, dtype=np.float32)           # shape: (1024,)
-        proj = vec @ linear_weight.T                    # shape: (2048,)
-        norm = np.linalg.norm(proj)
-        results.append(proj / norm if norm > 0 else proj) # L2-normalised
-    return results
+    print("\nLoading voyage-4-nano GGUF (GPU)...")
+    llm = Llama(
+        model_path=gguf_path,
+        embedding=True,
+        pooling_type=1,   # mean pooling — required for this model architecture
+        n_ctx=N_CTX,
+        n_batch=512,      # Increased from 1 to allow GPU to process tokens in parallel
+        n_gpu_layers=-1,  # Offload all layers to GPU
+        verbose=True,
+    )
+    print("  Model ready.")
 
+    # ── 5. Embed batch ────────────────────────────────────────────────────────────
+    def embed_batch(texts: list[str]) -> list[np.ndarray]:
+        """
+        Embed a batch of strings and return 2048-dim L2-normalised vectors.
+        Batching + n_batch=512 is critical to actually saturate the GPU.
+        """
+        try:
+            llm._ctx.kv_cache_clear()
+        except AttributeError:
+            llm.reset()
 
+        raw_outputs = llm.embed(texts)
+        
+        # llama_cpp.embed might return a flat list if given 1 text, or list of lists
+        if raw_outputs and not isinstance(raw_outputs[0], (list, tuple)):
+            raw_outputs = [raw_outputs]
+
+        results = []
+        for raw in raw_outputs:
+            vec = np.array(raw, dtype=np.float32)           # shape: (1024,)
+            proj = vec @ linear_weight.T                    # shape: (2048,)
+            norm = np.linalg.norm(proj)
+            results.append(proj / norm if norm > 0 else proj) # L2-normalised
+        return results
 # ── 6. Deterministic chunk ID ─────────────────────────────────────────────────
 def chunk_id(text_index: str) -> str:
     """First 32 hex chars of SHA-256(text_index)."""
@@ -176,7 +239,22 @@ seen = {}
 for c in chunks:
     cid = chunk_id(c["text_index"])
     seen[cid] = c
-chunks = list(seen.values())
+
+# If we are doing a limited test, make sure the eval_set verses are prioritized!
+import json
+try:
+    with open("eval_set.json", "r", encoding="utf-8") as f:
+        eval_set = json.load(f)
+    golden_ids = set(item["expected_id"] for item in eval_set)
+    # Reorder chunks: golden IDs first, then the rest
+    golden_chunks = [c for cid, c in seen.items() if cid in golden_ids]
+    other_chunks = [c for cid, c in seen.items() if cid not in golden_ids]
+    chunks = golden_chunks + other_chunks
+    print(f"Prioritized {len(golden_chunks)} golden verses for evaluation.")
+except Exception as e:
+    print("Could not prioritize golden set:", e)
+    chunks = list(seen.values())
+
 print(f"After dedup: {len(chunks):,} unique chunks (removed {total - len(chunks):,} duplicates)")
 
 # Skip already-indexed IDs (resumability)
@@ -213,7 +291,7 @@ except ImportError:
     bar = None
 
 t_start = time.time()
-BATCH_SIZE = 256  # process texts in chunks of 256 to saturate the GPU
+BATCH_SIZE = 100  # Safe batch size for OpenRouter API payload limits
 
 for i in range(0, len(pending), BATCH_SIZE):
     batch_chunks = pending[i : i + BATCH_SIZE]

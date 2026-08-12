@@ -1,12 +1,12 @@
 # Arabic Poetry RAG (Retrieval-Augmented Generation)
 
-An end-to-end RAG system for classical Arabic poetry using local embeddings (`voyage-4-nano`), ChromaDB vector store, and Metadata filtering.
+An end-to-end RAG system for classical Arabic poetry using embeddings, a LanceDB vector store, hybrid retrieval, and metadata filtering.
 
 ---
 
 ## 🚀 Quick Start & Installation
 
-Since local vector database storage (`chromadb/`) and temporary build artifacts are ignored by Git (`.gitignore`), follow these steps to set up and run the project on a new machine:
+Since local vector database storage (`lancedb/`) and temporary build artifacts are ignored by Git (`.gitignore`), follow these steps to set up and run the project on a new machine:
 
 ### 1. Prerequisites
 - Python >= 3.13
@@ -25,8 +25,22 @@ uv sync
 ```
 *(Or with standard pip: `pip install -e .`)*
 
-### 4. Build / Generate the Local Vector Database (`chromadb/`)
-Run `embed_corpus.py` to preprocess the dataset, generate vector embeddings, and initialize the local ChromaDB database:
+### 4. Track Retrieval Experiments
+MLflow is kept in a separate dependency group because it is needed for evaluation
+experiments, not for the FastAPI serving image:
+
+```bash
+uv sync --group mlops
+uv run python evaluate.py --mlflow --output evaluation_results.json
+uv run mlflow ui --backend-store-uri ./mlruns
+```
+
+The GitHub Actions workflow runs a small deterministic retrieval fixture and builds the
+Docker image on every push. It does not call the embedding API or rebuild the production
+corpus.
+
+### 5. Build / Generate the Local Vector Database (`lancedb/`)
+Run `embed_corpus.py` to preprocess the dataset, generate vector embeddings, and initialize the local LanceDB database:
 
 ```bash
 # Test run with a limited batch (e.g. 1000 verses)
@@ -36,13 +50,13 @@ uv run python embed_corpus.py --limit 1000
 uv run python embed_corpus.py
 ```
 
-This will automatically create the `chromadb/` directory locally with all index data and metadata intact.
+This will automatically create the `lancedb/` directory locally with all vector data and metadata intact.
 
 ---
 
 ## 📁 Repository Structure
 
-- **`embed_corpus.py`**: Pipeline to preprocess poetry verses, compute embeddings via `voyage-4-nano`, and save to ChromaDB.
+- **`embed_corpus.py`**: Pipeline to preprocess poetry verses, compute embeddings, and save to LanceDB.
 - **`preprocess.py`**: Data cleaning and tokenization routines.
 - **`embed_sample.py`**: Small standalone script for testing vector embeddings.
 - **`pyproject.toml`**: Dependency configuration.

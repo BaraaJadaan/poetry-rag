@@ -1,108 +1,165 @@
-"""
-Evaluation Harness for Phase 6.
+"""Evaluation harness for semantic, keyword, and hybrid retrieval.
 
-Loads eval_set.json and tests all queries against Semantic, Keyword, and Hybrid
-search strategies. Calculates Recall@1, Recall@5, and Mean Reciprocal Rank (MRR).
+The evaluation functions are intentionally reusable by CI fixtures. The command-line
+entrypoint can optionally wrap a full evaluation in an MLflow run without making MLflow
+part of the serving container.
 """
 
+from __future__ import annotations
+
+import argparse
 import json
+import os
 import sys
 import time
+from pathlib import Path
+from typing import Any
 
-try:
-    from retriever import HybridRetriever
-except ImportError:
-    print("ERROR: retriever.py not found.")
-    sys.exit(1)
 
-# Ensure UTF-8 output on Windows
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-
-def calculate_metrics(results_list, expected_id):
-    """
-    Returns (hit_at_1, hit_at_5, reciprocal_rank)
-    results_list is a list of dictionaries/rows that have an 'id' field.
-    """
+def calculate_metrics(results_list: list[dict[str, Any]], expected_id: str) -> tuple[int, int, float]:
+    """Return hit@1, hit@5, and reciprocal rank for one query."""
     for rank, row in enumerate(results_list):
         if row["id"] == expected_id:
             return (1 if rank == 0 else 0, 1 if rank < 5 else 0, 1.0 / (rank + 1))
     return (0, 0, 0.0)
 
-def main():
-    try:
-        with open("eval_set.json", "r", encoding="utf-8") as f:
-            eval_set = json.load(f)
-    except FileNotFoundError:
-        print("ERROR: eval_set.json not found. Run build_golden_set.py first.")
-        sys.exit(1)
 
-    print(f"Loaded Golden Set with {len(eval_set)} queries.\n")
-    retriever = HybridRetriever()
-
-    metrics = {
-        "Semantic": {"r1": 0, "r5": 0, "mrr": 0.0, "time": 0.0},
-        "Keyword":  {"r1": 0, "r5": 0, "mrr": 0.0, "time": 0.0},
-        "Hybrid":   {"r1": 0, "r5": 0, "mrr": 0.0, "time": 0.0},
+def evaluate_retriever(retriever, eval_set: list[dict[str, Any]], top_k: int = 10) -> dict[str, dict[str, float]]:
+    """Run the three retrieval strategies and return normalized metrics."""
+    metrics: dict[str, dict[str, float]] = {
+        "Semantic": {"recall_at_1": 0.0, "recall_at_5": 0.0, "mrr": 0.0, "latency_ms": 0.0},
+        "Keyword": {"recall_at_1": 0.0, "recall_at_5": 0.0, "mrr": 0.0, "latency_ms": 0.0},
+        "Hybrid": {"recall_at_1": 0.0, "recall_at_5": 0.0, "mrr": 0.0, "latency_ms": 0.0},
     }
 
-    n = len(eval_set)
-    print(f"\nRunning evaluation on {n} queries...\n")
-
-    for i, item in enumerate(eval_set):
+    for item in eval_set:
         query = item["query"]
         expected_id = item["expected_id"]
-        
-        # 1. Semantic Search
-        t0 = time.time()
-        res_sem = retriever.search_semantic(query, limit=10).to_dict('records')
-        t1 = time.time()
-        r1, r5, mrr = calculate_metrics(res_sem, expected_id)
-        metrics["Semantic"]["r1"] += r1
-        metrics["Semantic"]["r5"] += r5
-        metrics["Semantic"]["mrr"] += mrr
-        metrics["Semantic"]["time"] += (t1 - t0)
+        searches = {
+            "Semantic": retriever.search_semantic,
+            "Keyword": retriever.search_keyword,
+            "Hybrid": retriever.search_hybrid,
+        }
 
-        # 2. Keyword Search
-        t0 = time.time()
-        res_key = retriever.search_keyword(query, limit=10).to_dict('records')
-        t1 = time.time()
-        r1, r5, mrr = calculate_metrics(res_key, expected_id)
-        metrics["Keyword"]["r1"] += r1
-        metrics["Keyword"]["r5"] += r5
-        metrics["Keyword"]["mrr"] += mrr
-        metrics["Keyword"]["time"] += (t1 - t0)
+        for strategy, search in searches.items():
+            started = time.perf_counter()
+            results = search(query, limit=top_k).to_dict("records")
+            elapsed_ms = (time.perf_counter() - started) * 1000
+            r1, r5, mrr = calculate_metrics(results, expected_id)
+            metrics[strategy]["recall_at_1"] += r1
+            metrics[strategy]["recall_at_5"] += r5
+            metrics[strategy]["mrr"] += mrr
+            metrics[strategy]["latency_ms"] += elapsed_ms
 
-        # 3. Hybrid Search
-        t0 = time.time()
-        res_hyb = retriever.search_hybrid(query, limit=10).to_dict('records')
-        t1 = time.time()
-        r1, r5, mrr = calculate_metrics(res_hyb, expected_id)
-        metrics["Hybrid"]["r1"] += r1
-        metrics["Hybrid"]["r5"] += r5
-        metrics["Hybrid"]["mrr"] += mrr
-        metrics["Hybrid"]["time"] += (t1 - t0)
+    count = len(eval_set)
+    if count == 0:
+        raise ValueError("Evaluation set must contain at least one query.")
 
-        print(f"[{i+1}/{n}] Evaluated: '{query}'", flush=True)
+    for values in metrics.values():
+        values["recall_at_1"] /= count
+        values["recall_at_5"] /= count
+        values["mrr"] /= count
+        values["latency_ms"] /= count
 
-    print("\n" + "="*60, flush=True)
-    print("                    EVALUATION RESULTS", flush=True)
-    print("="*60, flush=True)
-    print(f"{'Strategy':<12} | {'Recall@1':<10} | {'Recall@5':<10} | {'MRR':<10} | {'Avg Latency'}", flush=True)
-    print("-" * 60, flush=True)
-    
-    for strategy, m in metrics.items():
-        r1_pct = (m["r1"] / n) * 100
-        r5_pct = (m["r5"] / n) * 100
-        mrr_avg = m["mrr"] / n
-        latency = (m["time"] / n) * 1000
-        print(f"{strategy:<12} | {r1_pct:>8.1f}% | {r5_pct:>8.1f}% | {mrr_avg:>8.3f} | {latency:>7.1f} ms", flush=True)
-    
-    print("="*60, flush=True)
-    
-    print("\nConclusion: Hybrid search (RRF) should substantially outperform", flush=True)
-    print("Keyword-only (since the queries use synonyms, not exact verse text)", flush=True)
-    print("and should edge out Semantic-only on tricky edge cases.", flush=True)
+    return metrics
+
+
+def load_eval_set(path: str | Path) -> list[dict[str, Any]]:
+    with open(path, "r", encoding="utf-8") as handle:
+        data = json.load(handle)
+    if not isinstance(data, list):
+        raise ValueError(f"Evaluation set must be a JSON list: {path}")
+    return data
+
+
+def print_results(metrics: dict[str, dict[str, float]]) -> None:
+    print("\n" + "=" * 72)
+    print("                           EVALUATION RESULTS")
+    print("=" * 72)
+    print(f"{'Strategy':<12} | {'Recall@1':<10} | {'Recall@5':<10} | {'MRR':<10} | {'Avg latency'}")
+    print("-" * 72)
+    for strategy, values in metrics.items():
+        print(
+            f"{strategy:<12} | {values['recall_at_1'] * 100:>8.1f}% | "
+            f"{values['recall_at_5'] * 100:>8.1f}% | {values['mrr']:>8.3f} | "
+            f"{values['latency_ms']:>8.1f} ms"
+        )
+    print("=" * 72)
+
+
+def log_mlflow_run(metrics: dict[str, dict[str, float]], eval_count: int, top_k: int,
+                   table_name: str, table_size: int) -> None:
+    """Log one evaluation to local or configured MLflow tracking storage."""
+    import mlflow
+
+    experiment_name = os.getenv("MLFLOW_EXPERIMENT", "poetry-rag-retrieval")
+    mlflow.set_experiment(experiment_name)
+    run_name = os.getenv("MLFLOW_RUN_NAME")
+
+    with mlflow.start_run(run_name=run_name):
+        mlflow.set_tags({
+            "git_commit": os.getenv("GITHUB_SHA", "local"),
+            "corpus_version": os.getenv("CORPUS_VERSION", "unspecified"),
+        })
+        mlflow.log_params({
+            "embedding_mode": "openrouter" if os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true" else "local",
+            "embedding_model": "qwen/qwen3-embedding-8b" if os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true" else "voyage-4-nano",
+            "table_name": table_name,
+            "table_size": table_size,
+            "evaluation_queries": eval_count,
+            "top_k": top_k,
+        })
+
+        for strategy, values in metrics.items():
+            prefix = strategy.lower()
+            mlflow.log_metrics({
+                f"{prefix}_recall_at_1": values["recall_at_1"],
+                f"{prefix}_recall_at_5": values["recall_at_5"],
+                f"{prefix}_mrr": values["mrr"],
+                f"{prefix}_latency_ms": values["latency_ms"],
+            })
+
+        mlflow.log_dict(metrics, "retrieval_metrics.json")
+        print(f"MLflow run logged in experiment '{experiment_name}'.")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate the Poetry RAG retriever.")
+    parser.add_argument("--eval-set", default="eval_set.json")
+    parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--mlflow", action="store_true", help="Track this evaluation in MLflow.")
+    parser.add_argument("--output", help="Optional path for a JSON metrics report.")
+    args = parser.parse_args()
+
+    try:
+        from retriever import HybridRetriever
+        eval_set = load_eval_set(args.eval_set)
+        retriever = HybridRetriever()
+    except (FileNotFoundError, ImportError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
+
+    print(f"Loaded {len(eval_set)} evaluation queries.")
+    metrics = evaluate_retriever(retriever, eval_set, top_k=args.top_k)
+    print_results(metrics)
+
+    report = {
+        "evaluation_set": str(args.eval_set),
+        "query_count": len(eval_set),
+        "top_k": args.top_k,
+        "metrics": metrics,
+    }
+    if args.output:
+        with open(args.output, "w", encoding="utf-8") as handle:
+            json.dump(report, handle, ensure_ascii=False, indent=2)
+
+    if args.mlflow:
+        try:
+            log_mlflow_run(metrics, len(eval_set), args.top_k, retriever.table_name, len(retriever.tbl))
+        except ImportError:
+            print("ERROR: MLflow is not installed. Run: uv sync --group mlops", file=sys.stderr)
+            raise SystemExit(1)
+
 
 if __name__ == "__main__":
     main()

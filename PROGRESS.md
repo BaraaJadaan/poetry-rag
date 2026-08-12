@@ -15,6 +15,7 @@ Chosen over generic PDF-chat and compliance-bot clones because: (1) domain is ge
 - [x] Phase 6 — Evaluation: 25-query golden set, recall@k harness
 - [x] Phase 7 — Multi-tool orchestration layer (search_verses, analyze_meter, gloss_vocabulary)
 - [x] Phase 8 — FastAPI backend (Streaming/SSE) + RTL-aware web frontend + deployment (Oracle ARM Local + OpenRouter API Dual-Toggle)
+- [x] Phase 8.5 — MLOps: MLflow evaluation tracking + deterministic retrieval CI + Docker build validation
 - [ ] Phase 9 — Interview-prep consolidation and mock interview
 
 ## Friction log
@@ -33,11 +34,16 @@ Chosen over generic PDF-chat and compliance-bot clones because: (1) domain is ge
 - Phase 8 (Aug 6) — OpenRouter toggle returned `404 No endpoints found for anthropic/claude-3.5-sonnet`. Root cause: Anthropic retired the claude-3.5-sonnet endpoint on OpenRouter; the model ID became a dead route rather than auto-upgrading. Fix: Updated the hard-coded `model=` value in `agent.py` to `anthropic/claude-sonnet-5`, the current available Claude Sonnet on OpenRouter. Lesson: pin provider-hosted model slugs as named constants so future deprecations are a one-line update, not a debugging hunt.
 - Phase 8 (Aug 6) — Switching the backend toggle had no visible feedback; users toggled and kept chatting, confused why responses still came from the old model (conversation context stays server-side across model switches). Fix: Added a pill-shaped glassmorphism toast (CSS `position: fixed`, spring `cubic-bezier` entry animation, 6-second auto-dismiss) that slides in from the top and includes an inline "تحديث الآن" button wired to `location.reload()`.
 - Phase 8 (Aug 6) — OpenRouter / Qwen 3.7 streamed `<think>...</think>` inline inside `delta.content` (plain text, not a separate token stream). The frontend's turn-start state machine never advanced past turn 0, so the thinking drawer received both the reasoning and the final answer, and the answer area stayed empty. Fix: Added a real-time three-state parser (`before_think → in_think → after_think`) in `agent.py` that buffers incoming chunks with a partial-tag lookahead, emits thinking content on turn 0, sends `turn_start: 1` on `</think>`, and routes the rest to the answer area on turn 1 — no frontend changes required.
+- Phase 8.2 (Aug 6) — `llama-cpp-python` wheels are OS-specific (Windows .whl vs Linux source build), causing standard `requirements.txt` to fail when containerizing for Oracle ARM. Fix: Mapped dependencies dynamically in `pyproject.toml` using PEP-508 environment markers (`sys_platform == 'linux'`).
+- Phase 8.2 (Aug 6) — `localStorage` state management caused context pollution (hallucinations of past turns) when toggling between local LLM and API. Fix: Decoupled visual state from execution context, ensuring the chat resets cleanly upon backend switch.
+- Phase 8.3 (Aug 6) — Needed to pivot to OpenRouter for semantic embeddings (`qwen/qwen3-embedding-8b`) due to Voyage-4-nano's poor semantic recall, but didn't want to wipe the working local Windows setup. Fix: Built a Dual-Environment Architecture. Python scripts fall back to local `llama.cpp` by default, while `docker-compose.yml` injects `USE_OPENROUTER_EMBED=true` to dynamically toggle the container to the OpenRouter embedding API and the fast `unsloth/Qwen3.5-2B-MTP-GGUF` generator.
+  - Phase 8.4 (Aug 7) — Caught a critical infrastructure limit: Oracle Always Free ARM instance only provisioned 1GB of RAM, making it impossible to run the Qwen 3.5 2B model locally inside the Docker container without an OOM crash. Fix: Pivoted to a 100% API Proxy architecture for the cloud. Swapped the env var to `CLOUD_DEPLOYMENT=true`, which entirely skips downloading the GGUF model in `entrypoint.sh`, forces `app.py` to route all queries to OpenRouter's Qwen 3.7 Flash, and dynamically hides the Local/API toggle button on the frontend for cloud visitors, all while preserving the dual-toggle setup natively for the Windows laptop.
+- Phase 8.5 (Aug 12) — Adding MLflow to the default development environment made dependency installation fragile because its tracking stack includes large database dependencies. Fix: isolated MLflow in an explicit `mlops` dependency group, kept pytest in the normal dev group, and configured CI to run deterministic retrieval tests without installing MLflow or calling external embedding APIs.
 
 ## Companion docs
-- `concepts.html` — 11 entries
-- `interview_qa.html` — 17 questions
-- `walkthrough.html` — 3 phase beats
+- `concepts.html` — 19 entries
+- `interview_qa.html` — 32 questions
+- `walkthrough.html` — 11 phase beats
 
 ## Mock interview weak spots
 _To be filled after first live mock interview._

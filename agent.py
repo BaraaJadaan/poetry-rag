@@ -9,7 +9,7 @@ from retriever import HybridRetriever
 # ── Config ────────────────────────────────────────────────────────────────────
 # You can update this to point exactly to where your Qwen 3.5 9B GGUF is stored.
 # e.g. "./models/qwen-3.5-9b-instruct-q4_k_m.gguf"
-AGENT_MODEL_PATH = os.getenv("AGENT_MODEL_PATH", "./models/OmniCoder-Claude-uncensored-V2-Q4_K_M.gguf")
+AGENT_MODEL_PATH = os.getenv("AGENT_MODEL_PATH", "./models/Qwen3.5-2B-MTP-Q4_K_M.gguf")
 
 print("Initializing Retriever...")
 retriever = HybridRetriever()

@@ -11,6 +11,8 @@ services:
       - model_data:/app/models
     env_file:
       - .env
+    environment:
+      - CLOUD_DEPLOYMENT=true
     restart: unless-stopped
 
   # Cloudflare Tunnel to expose the web service securely without opening firewall ports

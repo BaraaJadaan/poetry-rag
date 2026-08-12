@@ -14,8 +14,17 @@ class ChatRequest(BaseModel):
     messages: list
     use_openrouter: bool
 
+@app.get("/config")
+def get_config():
+    is_cloud = os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true"
+    return {"cloud_deployment": is_cloud}
+
 @app.post("/chat")
 async def chat_endpoint(req: ChatRequest):
+    is_cloud = os.getenv("CLOUD_DEPLOYMENT", "false").lower() == "true"
+    if is_cloud:
+        req.use_openrouter = True
+
     # Strip any accidental surrounding quotes from the .env value
     api_key = os.getenv("opentouter_api", "").strip().strip("'\"")
     return StreamingResponse(

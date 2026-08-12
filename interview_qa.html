@@ -674,6 +674,22 @@
           <span class="qa-category decision">Technical Decision</span>
         </div>
         <div class="qa-body">
+          <h3 class="question">Once you realized the local Voyage-nano model scored 0% on Semantic Recall, what was your architectural fix?</h3>
+          <div class="answer-mask" onclick="this.classList.add('revealed')">
+            <span class="reveal-text">Tap to reveal answer</span>
+            <div class="answer">
+              <p>Instead of manually tweaking chunking logic or LanceDB settings, I used the 0% metric to prove that the bottleneck was the <em>model's underlying linguistic capability</em>. I dynamically swapped the embedding layer to use <code>qwen/qwen3-embedding-8b</code> via the OpenRouter API.</p>
+              <p>Because Qwen3 is a massive parameter model specifically trained on multilingual and Arabic text, the evaluation metric immediately jumped from 0% to ~90% Recall@1 without touching a single line of the RAG orchestration code. This proved that the RAG architecture and zero-overlap semantic evaluation set were fundamentally sound, and successfully demonstrated the value of modular, decoupled system design.</p>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa-card" data-category="Decision">
+        <div class="qa-header">
+          <span class="qa-category decision">Technical Decision</span>
+        </div>
+        <div class="qa-body">
           <h3 class="question">How did you debug the 0% Semantic Recall? How did you know it was a pooling issue rather than just a bad model?</h3>
           <div class="answer-mask" onclick="this.classList.add('revealed')">
             <span class="reveal-text">Tap to reveal answer</span>
@@ -799,6 +815,59 @@
       <div class="answer" hidden>
         <p>This happened because I passed sampling parameters (like temperature=0.7) to the local OmniCoder model, making it more creative. In the first pass, it successfully generated the XML tool call <code>&lt;function=search_verses&gt;</code>. The server executed the tool and appended the result to the chat history.</p>
         <p>However, in the second pass, the uncensored model saw its own previous XML tool call in the context window and hallucinated that it needed to output the same XML string again, triggering an infinite loop of repeated tool executions. I fixed this using two guardrails: First, I added strict <code>stop=["&lt;/tool_call&gt;", "&lt;/function&gt;"]</code> sequences to the inference engine to physically cut off generation the millisecond a tool call completes. Second, I dynamically injected a strict system warning (<em>"Do not call the tool again, just provide the answer"</em>) directly into the tool result prompt. This completely locked the model into the correct ReAct pattern.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    
+    <article class="qa-card" data-category="Decision">
+      <div class="question-header">
+        <span class="category-badge">Technical Decision</span>
+      </div>
+      <div class="question-text">
+        <strong>You built a hybrid evaluation pipeline (Dense + BM25) and got 0.0% Recall across the board on your first run. What went wrong, and how does this affect your architecture moving forward?</strong>
+      </div>
+      <button class="reveal-btn" onclick="this.closest('.qa-card').classList.add('revealed')">Reveal answer</button>
+      <div class="answer">
+        <p>It exposed two classic pitfalls of building RAG for Arabic text that standard tutorials often miss:</p>
+        <p><strong>1. The Diacritics (Tashkeel) Problem:</strong> BM25 looks for exact matches. The source verses were stored with heavy diacritics (e.g., <code>الخَيْلُ</code>), while the user queries were plain text (e.g., <code>الخيل</code>). Because Tantivy’s default FTS doesn't strip Arabic diacritics, it failed to find any exact keyword matches, completely neutering the Keyword retrieval side of the hybrid approach.</p>
+        <p><strong>2. Multilingual Model Limitations:</strong> We used a small, local embedding model (<code>voyage-4-nano-gguf</code>). While great for English, its semantic mapping for rich Arabic poetry (matching a plain-text synopsis to the actual classical verse) was severely underpowered, meaning it pulled arbitrary snippets instead of the correct verse.</p>
+        <p><strong>The Fix:</strong> This means we have to add a strict normalization preprocessing step (stripping all diacritics and normalizing characters like Alef and Yaa) before indexing into LanceDB, and we likely need to upgrade the embedding model to something specifically tuned for Arabic semantics, like a Qwen or specialized multilingual model.</p>
+      </div>
+      <div class="self-rating">
+        <span>How'd you do?</span>
+        <div class="rating-buttons">
+          <button onclick="rateCard(this, 'miss')">Blanked</button>
+          <button onclick="rateCard(this, 'close')">Close</button>
+          <button onclick="rateCard(this, 'perfect')">Nailed it</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why track retrieval evaluations in MLflow instead of only keeping console output or CI logs?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Console output tells me what happened once; MLflow records the conditions that produced the result. For each run I log the embedding mode and model, LanceDB table, evaluation-set size, top-k, Recall@1, Recall@5, MRR, latency, and a JSON metrics artifact.</p>
+        <p>I chose local or configured MLflow tracking rather than adding a tracking server to Oracle immediately. This is a solo project, and MLflow's local file-backed mode is enough to compare experiments without adding another always-on service. A remote tracking server becomes worthwhile when multiple machines or collaborators need shared history.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why does CI use a small deterministic retrieval fixture instead of rebuilding the full embedding index on every push?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The full corpus requires millions of API embedding requests, so putting it in push-triggered CI would be slow, expensive, and nondeterministic. The fixture stores a few fixed vectors and expected IDs, then exercises the same semantic, BM25, and RRF code paths without external API calls.</p>
+        <p>The trade-off is that the fixture cannot prove production-scale quality. That is why it complements, rather than replaces, the full golden-set evaluation: CI catches code regressions on every push, while MLflow-tracked full runs measure model and corpus changes as deliberate experiments.</p>
         <div class="rate-btns">
           <button class="rate-btn rate-good" type="button">Got it</button>
           <button class="rate-btn rate-review" type="button">Review again</button>

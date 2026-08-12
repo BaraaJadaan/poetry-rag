@@ -589,6 +589,43 @@
       </div>
     </article>
 
+    <article class="entry" data-phase="Phase 8.5: MLOps">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.5: MLOps</p>
+      <h2 class="term">Experiment Tracking with MLflow</h2>
+      <p class="explain">
+        Experiment tracking records the inputs and outcomes of an ML run together: the
+        embedding model, corpus/table version, retrieval configuration, evaluation set,
+        Recall@k, MRR, and latency. MLflow gives those runs a searchable UI and stores the
+        metrics and JSON report as artifacts, so an improvement is evidence rather than a
+        claim based on the latest console output.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The important experiment is not model training; it is comparing embedding and
+        retrieval configurations for Arabic search. Keeping MLflow in the optional
+        <code>mlops</code> dependency group also prevents the serving image from carrying a
+        tracking stack it does not need.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.5: MLOps">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.5: MLOps</p>
+      <h2 class="term">Deterministic Retrieval Regression Tests</h2>
+      <p class="explain">
+        A regression test is only useful in CI when it is fast, repeatable, and independent
+        of paid or changing external services. The test fixture uses a tiny LanceDB table,
+        fixed vectors, fixed queries, and known expected IDs to exercise semantic search,
+        Tantivy full-text search, and Reciprocal Rank Fusion without calling an embedding API
+        or rebuilding the production corpus.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The full evaluation remains available for MLflow-tracked runs, but GitHub Actions
+        must not spend API credits or wait hours on every push. CI checks the retrieval contract
+        itself and the Docker build; production-scale embedding is a deliberate release task.</p>
+      </div>
+    </article>
+
     <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
   </main>
 
