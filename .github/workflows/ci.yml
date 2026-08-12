@@ -24,7 +24,10 @@ jobs:
         run: python -m pip install uv
 
       - name: Install locked dependencies
-        run: uv sync --locked --dev --no-group mlops
+        # The regression fixture does not use the local LLM. The project keeps a
+        # Windows-only llama-cpp wheel for development, so omit that package from
+        # this Linux CI environment. Docker installs the Linux package separately.
+        run: uv sync --locked --dev --no-group mlops --no-install-package llama-cpp-python
 
       - name: Run unit and retrieval regression tests
         run: uv run pytest -q
