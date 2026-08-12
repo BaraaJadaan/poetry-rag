@@ -692,15 +692,6 @@ wheels = [
 ]
 
 [[package]]
-name = "diskcache"
-version = "5.6.3"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
-]
-
-[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1600,71 +1591,6 @@ wheels = [
 ]
 
 [[package]]
-name = "llama-cpp-python"
-version = "0.3.34"
-source = { registry = "https://pypi.org/simple" }
-resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform != 'win32'",
-    "python_full_version < '3.14' and sys_platform != 'win32'",
-]
-dependencies = [
-    { name = "diskcache" },
-    { name = "jinja2" },
-    { name = "numpy" },
-    { name = "typing-extensions" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c1/2f/46487e949da42b31847853793ddbfd44c7414e94d4364c9a41f91f30af27/llama_cpp_python-0.3.34.tar.gz", hash = "sha256:d849d286d808284f1d3ec1bd6875572430d29d1f9574a010232caa4e9cef0e35", size = 71617302, upload-time = "2026-07-12T04:33:41.928Z" }
-
-[[package]]
-name = "llama-cpp-python"
-version = "0.3.34"
-source = { path = "C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl" }
-resolution-markers = [
-    "python_full_version >= '3.14' and sys_platform == 'win32'",
-    "python_full_version < '3.14' and sys_platform == 'win32'",
-]
-dependencies = [
-    { name = "diskcache" },
-    { name = "jinja2" },
-    { name = "numpy" },
-    { name = "typing-extensions" },
-]
-wheels = [
-    { filename = "llama_cpp_python-0.3.34-py3-none-win_amd64.whl", hash = "sha256:5e9f4509adb65f3fd4a8490753e278709b458d1747525ba69eac5f5966ac1bb9" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "diskcache", specifier = ">=5.6.1" },
-    { name = "fastapi", marker = "extra == 'server'", specifier = ">=0.100.0" },
-    { name = "fastapi", marker = "extra == 'test'", specifier = ">=0.100.0" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.24.1" },
-    { name = "httpx", marker = "extra == 'test'", specifier = ">=0.24.1" },
-    { name = "huggingface-hub", marker = "extra == 'test'", specifier = ">=0.23.0" },
-    { name = "jinja2", specifier = ">=2.11.3" },
-    { name = "llama-cpp-python", extras = ["dev", "server", "test"], marker = "extra == 'all'" },
-    { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.4.3" },
-    { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.1.18" },
-    { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.22.0" },
-    { name = "numpy", specifier = ">=1.20.0" },
-    { name = "pydantic-settings", marker = "extra == 'server'", specifier = ">=2.0.1" },
-    { name = "pydantic-settings", marker = "extra == 'test'", specifier = ">=2.0.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.4.0" },
-    { name = "pytest", marker = "extra == 'test'", specifier = ">=7.4.0" },
-    { name = "pyyaml", marker = "extra == 'server'", specifier = ">=5.1" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.7" },
-    { name = "scipy", marker = "extra == 'test'", specifier = ">=1.10" },
-    { name = "sse-starlette", marker = "extra == 'server'", specifier = ">=1.6.1" },
-    { name = "sse-starlette", marker = "extra == 'test'", specifier = ">=1.6.1" },
-    { name = "starlette-context", marker = "extra == 'server'", specifier = ">=0.3.6,<0.4" },
-    { name = "starlette-context", marker = "extra == 'test'", specifier = ">=0.3.6,<0.4" },
-    { name = "twine", marker = "extra == 'dev'", specifier = ">=4.0.2" },
-    { name = "typing-extensions", specifier = ">=4.5.0" },
-    { name = "uvicorn", marker = "extra == 'server'", specifier = ">=0.22.0" },
-]
-provides-extras = ["server", "test", "dev", "all"]
-
-[[package]]
 name = "mako"
 version = "1.4.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2477,12 +2403,6 @@ dependencies = [
     { name = "uvicorn" },
 ]
 
-[package.optional-dependencies]
-local-llm = [
-    { name = "llama-cpp-python", version = "0.3.34", source = { registry = "https://pypi.org/simple" }, marker = "sys_platform != 'win32'" },
-    { name = "llama-cpp-python", version = "0.3.34", source = { path = "C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
@@ -2499,8 +2419,6 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "huggingface-hub" },
     { name = "lancedb", specifier = ">=0.36.0" },
-    { name = "llama-cpp-python", marker = "sys_platform == 'win32' and extra == 'local-llm'", path = "C:/Users/braaj/Downloads/llama_cpp_python-0.3.34-py3-none-win_amd64.whl" },
-    { name = "llama-cpp-python", marker = "sys_platform != 'win32' and extra == 'local-llm'", specifier = ">=0.3.34" },
     { name = "openai", specifier = ">=2.53.0" },
     { name = "pandas", specifier = ">=2.3.3" },
     { name = "pyarrow", specifier = ">=25.0.0" },
@@ -2511,7 +2429,6 @@ requires-dist = [
     { name = "tqdm", specifier = ">=4.69.0" },
     { name = "uvicorn", specifier = ">=0.52.1" },
 ]
-provides-extras = ["local-llm"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -29,7 +29,7 @@ if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
         )
     except Exception as e:
         print(f"Warning: Could not load Agent Model at {AGENT_MODEL_PATH}: {e}")
-        print("Install the local-llm extra and provide a local GGUF file for local mode.")
+        print("Install llama-cpp-python separately and provide a local GGUF file for local mode.")
 
 
 # ── Tool Definitions (Python Functions) ───────────────────────────────────────

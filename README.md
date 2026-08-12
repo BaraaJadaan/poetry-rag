@@ -25,14 +25,17 @@ uv sync
 ```
 *(Or with standard pip: `pip install -e .`)*
 
-If you want to run the local GGUF LLM on Windows, install the optional local extra:
+If you want to run the local GGUF LLM on Windows, install your local wheel separately
+after creating the project environment:
 
-```bash
-uv sync --extra local-llm
+```powershell
+uv sync
+uv pip install --python .venv\Scripts\python.exe "C:\Users\braaj\Downloads\llama_cpp_python-0.3.34-py3-none-win_amd64.whl"
 ```
 
-The default install is enough for CI, cloud/API mode, retrieval evaluation, and the
-Oracle deployment.
+The default install is enough for CI, cloud/API mode, retrieval evaluation, and Oracle.
+The wheel is deliberately not listed in `pyproject.toml` or `uv.lock` because it only
+exists on this Windows machine.
 
 ### 4. Track Retrieval Experiments
 MLflow is kept in a separate dependency group because it is needed for evaluation
