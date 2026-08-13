@@ -180,8 +180,7 @@ if USE_OPENROUTER_EMBED:
                 results.append((vec / norm if norm > 0 else vec).astype(np.float16))
             except Exception as inner_e:
                 print(f"\n[Warning] Skipping verse due to API error: {inner_e}")
-                # Return a zero vector for the problematic verse so the pipeline survives
-                results.append(np.zeros(1024, dtype=np.float16))
+                results.append(None)
                 
         return results
 else:
@@ -326,6 +325,7 @@ except ImportError:
     bar = None
 
 t_start = time.time()
+skipped = 0
 BATCH_SIZE = 100  # Safe batch size for OpenRouter API payload limits
 
 for i in range(0, len(pending), BATCH_SIZE):
@@ -335,9 +335,12 @@ for i in range(0, len(pending), BATCH_SIZE):
     # 1. Embed the whole batch on GPU
     batch_embs = embed_batch(batch_texts)
     
-    # 2. Prepare LanceDB payload
+    # 2. Prepare LanceDB payload (skip verses that failed to embed)
     buf = []
     for chunk, emb in zip(batch_chunks, batch_embs):
+        if emb is None:
+            skipped += 1
+            continue
         cid = chunk_id(chunk["text_index"])
         buf.append({
             "id": cid,
@@ -372,10 +375,12 @@ if bar:
     bar.close()
 
 elapsed = time.time() - t_start
-rate    = len(pending) / elapsed
+rate    = (len(pending) - skipped) / elapsed
 
 print(f"\n{'='*55}")
-print(f"  Embedded : {len(pending):,} verses")
+print(f"  Embedded : {len(pending) - skipped:,} verses")
+if skipped:
+    print(f"  Skipped  : {skipped:,} verses (API errors, not stored — re-run retries them)")
 print(f"  Time     : {elapsed/60:.1f} min  ({rate:.2f} verses/sec)")
 print(f"  Total in collection: {len(tbl):,}")
 
