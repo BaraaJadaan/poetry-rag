@@ -136,13 +136,13 @@ class HybridRetriever:
                     input=[text],
                     model="qwen/qwen3-embedding-8b"
                 )
-                vec = np.array(response.data[0].embedding, dtype=np.float32)
+                vec = np.array(response.data[0].embedding, dtype=np.float32)[:1024]
                 norm = np.linalg.norm(vec)
                 return vec / norm if norm > 0 else vec
             except Exception as e:
                 print(f"Error embedding query: {e}")
                 # Fallback to zero vector so the program doesn't crash completely
-                return np.zeros(4096, dtype=np.float32)
+                return np.zeros(1024, dtype=np.float32)
         else:
             """Embeds a single search query using local Voyage model."""
             raw_outputs = self.llm.embed([text])

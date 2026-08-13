@@ -208,6 +208,8 @@ def run_pipeline(
     split: str = "train",
     limit: int | None = None,
     classical_only: bool = False,
+    poet_whitelist: set[str] | None = None,
+    quality_only: bool = False,
 ) -> list[dict]:
     """
     Load the Ashaar dataset, clean it, and return a flat list of verse chunks.
@@ -219,9 +221,27 @@ def run_pipeline(
         classical_only: if True, drop rows where poem_language_type is not
                         classical Arabic. Set this once you've inspected the
                         actual values of that field — see OPEN QUESTION below.
+        poet_whitelist: if set, keep only poems whose poet name is in this set.
+                        For the cloud deployment this curates the corpus down to
+                        the canon of poets users actually quote (~10% of rows),
+                        which makes embedding time, storage, and query latency
+                        manageable on a 1 GB free-tier VM.
+        quality_only:   if True, keep only complete verses (بيت with both
+                        hemistichs) whose normalized text has no "..." ellipsis
+                        marker. The preprocessing already merges most junk at
+                        the sadr+ajuz join; this removes the residual noise
+                        class that would otherwise pollute BM25 and the vector
+                        store.
 
     Returns:
         List of chunk dicts, one per verse (بيت), ready for embedding.
+
+    When poet_whitelist or quality_only is set, the dataset is scanned as a
+    stream (row by row, bounded memory) and `limit` counts *matching poems*
+    rather than raw rows — otherwise the first N rows of the file would almost
+    never contain whitelisted poets and the smoke test would embed nothing.
+    This streaming scan is also the foundation of the bounded-memory full
+    indexer planned for the server (see DEPLOYMENT_GUIDE.md §10).
 
     OPEN QUESTION (resolve before full corpus embed):
         What are the actual values in `poem language type`?
@@ -232,38 +252,76 @@ def run_pipeline(
     print(f"Loading {dataset_name} [{split}] from cache...")
     ds = load_dataset(dataset_name)[split]
 
-    if limit:
+    # The exclusion list is used by both the batch and the streaming path.
+    # It is safer to exclude known colloquial tags than require classical tags,
+    # so we don't drop the 28% that are unlabelled (which are overwhelmingly classical).
+    exclusion_list = {"عامي", "شعبي", "-"}
+
+    streaming = bool(poet_whitelist or quality_only)
+
+    if limit and not streaming:
         ds = ds.select(range(min(limit, len(ds))))
         print(f"  Limited to {limit} rows for testing.")
 
     print(f"  Loaded {len(ds):,} rows.")
 
-    # ── Step 1: Drop empty poems ──────────────────────────────────────────────
-    before = len(ds)
-    ds = ds.filter(is_valid_row)
-    after = len(ds)
-    print(f"  Dropped {before - after:,} empty-verse rows -> {after:,} remaining.")
-
-    # ── Step 2: (Optional) Filter to classical Arabic only ───────────────────
-    if classical_only:
+    if not streaming:
+        # ── Batch path (unchanged behaviour: local/full-corpus embedding) ──
         before = len(ds)
-        # The dataset uses multiple tags. 
-        # Keep: 'فصيح' (60.4%), 'None' (28.0%), 'فصحى' (8.2%)
-        # Drop: 'عامي' (3.3%), 'شعبي' (0.1%), '-' (0.0%)
-        # It is safer to exclude known colloquial tags than require classical tags, 
-        # so we don't drop the 28% that are unlabelled (which are overwhelmingly classical).
-        exclusion_list = {"عامي", "شعبي", "-"}
-        ds = ds.filter(lambda r: r.get("poem language type") not in exclusion_list)
+        ds = ds.filter(is_valid_row)
         after = len(ds)
-        print(f"  Filtered to classical: {before - after:,} colloquial removed -> {after:,} remaining.")
+        print(f"  Dropped {before - after:,} empty-verse rows -> {after:,} remaining.")
 
-    # ── Step 3: Build chunks ──────────────────────────────────────────────────
-    all_chunks = []
-    for row in ds:
-        chunks = build_chunks(row)
-        all_chunks.extend(chunks)
+        if classical_only:
+            before = len(ds)
+            # The dataset uses multiple tags.
+            # Keep: 'فصيح' (60.4%), 'None' (28.0%), 'فصحى' (8.2%)
+            # Drop: 'عامي' (3.3%), 'شعبي' (0.1%), '-' (0.0%)
+            ds = ds.filter(lambda r: r.get("poem language type") not in exclusion_list)
+            after = len(ds)
+            print(f"  Filtered to classical: {before - after:,} colloquial removed -> {after:,} remaining.")
 
-    total_poems = len(ds)
+        all_chunks = []
+        for row in ds:
+            chunks = build_chunks(row)
+            all_chunks.extend(chunks)
+    else:
+        # ── Streaming path (bounded memory, limit counts matching poems) ───
+        dropped = {"empty": 0, "colloquial": 0, "whitelist": 0}
+        matched_poems = 0
+        all_chunks = []
+        for row in ds:
+            if not is_valid_row(row):
+                dropped["empty"] += 1
+                continue
+            if classical_only and row.get("poem language type") in exclusion_list:
+                dropped["colloquial"] += 1
+                continue
+            if poet_whitelist and row.get("poet name") not in poet_whitelist:
+                dropped["whitelist"] += 1
+                continue
+            chunks = build_chunks(row)
+            if quality_only:
+                chunks = [
+                    c for c in chunks
+                    if c["is_orphan"] is False
+                    and "..." not in c["text_index"]
+                    and "\u2026" not in c["text_index"]
+                ]
+            all_chunks.extend(chunks)
+            matched_poems += 1
+            if limit and matched_poems >= limit:
+                print(f"  Reached {limit} matching poems; stopping the scan early.")
+                break
+        print(
+            "  Streaming scan: "
+            f"kept {matched_poems:,} poems; "
+            f"dropped empty={dropped['empty']:,}, "
+            f"colloquial={dropped['colloquial']:,}, "
+            f"off-whitelist={dropped['whitelist']:,}."
+        )
+
+    total_poems = matched_poems if streaming else len(ds)
     total_chunks = len(all_chunks)
     orphans = sum(1 for c in all_chunks if c["is_orphan"])
     print(f"\nDone.")

@@ -4,6 +4,10 @@ const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
 const backendToggle = document.getElementById('backend-toggle');
 
+const configuredApiBase = window.POETRY_RAG_CONFIG?.apiBaseUrl || '';
+const API_BASE_URL = configuredApiBase.replace(/\/+$/, '');
+const apiUrl = (path) => `${API_BASE_URL}${path}`;
+
 let conversation = [];
 let currentAbortController = null;
 let toastTimer = null;
@@ -14,7 +18,7 @@ const TOGGLE_KEY  = 'poetry_rag_backend';  // 'local' | 'openrouter'
 marked.setOptions({ breaks: true, gfm: true });
 
 // ── Fetch Server Config ───────────────────────────────────────────────────────
-fetch('/config').then(res => res.json()).then(config => {
+fetch(apiUrl('/config')).then(res => res.json()).then(config => {
     if (config.cloud_deployment) {
         const toggleContainer = document.querySelector('.toggle-container');
         if (toggleContainer) {
@@ -197,7 +201,7 @@ async function sendMessage() {
     currentAbortController = new AbortController();
 
     try {
-        const response = await fetch('/chat', {
+        const response = await fetch(apiUrl('/chat'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: conversation, use_openrouter: backendToggle.checked }),

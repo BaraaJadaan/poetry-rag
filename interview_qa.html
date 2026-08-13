@@ -756,8 +756,8 @@
       <h2 class="question">Since you deployed to a cloud server, why did you use `llama.cpp` instead of a production engine like `vLLM`?</h2>
       <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
       <div class="answer" hidden>
-        <p>Because of the deployment hardware constraints. I deployed to Oracle Cloud's "Always Free" tier, which provides a generous 24GB of RAM but uses an ARM Ampere CPU, not a GPU. `vLLM` is an incredible engine for high-throughput serving, but it is deeply tied to CUDA kernels and PagedAttention, meaning it strictly requires a dedicated GPU to be effective.</p>
-        <p>For an ARM CPU, `llama.cpp` is the absolute gold standard. It is heavily optimized for CPU inference using ARM NEON instructions. Choosing `vLLM` would have forced me into paying $30+/month for a dedicated GPU instance. By choosing `llama.cpp`, I achieved a $0/month production deployment while still demonstrating full MLOps capability.</p>
+        <p>Because of the deployment hardware constraints. My Oracle ARM instance has only 1GB of RAM and no GPU, so running the local Qwen model inside the server would be unreliable. `vLLM` is designed for high-throughput GPU serving and is not a sensible fit for this machine.</p>
+        <p>I kept `llama.cpp` for local Windows development, but the cloud container uses a lightweight API-proxy architecture: OpenRouter handles generation and query embeddings, while Docker, deterministic retrieval tests, MLflow evaluations, and the deployment workflow still belong to my system. This trades inference cost for a reliable $0 infrastructure deployment.</p>
         <div class="rate-btns">
           <button class="rate-btn rate-good" type="button">Got it</button>
           <button class="rate-btn rate-review" type="button">Review again</button>
@@ -862,12 +862,124 @@
     </article>
 
     <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Architecture</span><span class="num"></span></p>
+      <h2 class="question">How does a GitHub Pages frontend communicate with your FastAPI backend on Oracle?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>GitHub Pages serves only the static frontend. At build time, the Pages workflow
+        injects the public Oracle API URL into a small runtime configuration file. The
+        browser then sends <code>GET /config</code> and the POST request to
+        <code>/chat</code> at that URL, and reads the backend's streaming response.</p>
+        <p>Because the domains differ, FastAPI enables CORS for only the GitHub Pages origin.
+        I keep the OpenRouter API key in the Oracle server's environment, never in the
+        frontend or GitHub Pages artifact.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Deployment</span><span class="num"></span></p>
+      <h2 class="question">Why did you use a named Cloudflare Tunnel instead of putting the Oracle IP and port directly in the frontend?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>The frontend needs a stable HTTPS origin, but exposing the FastAPI port directly
+        would require opening and maintaining both the Fedora firewall and Oracle network
+        rules. A named Cloudflare Tunnel gives the backend a stable hostname and keeps the
+        origin port private; Cloudflared connects to the internal Docker service at
+        <code>http://web:8000</code>.</p>
+        <p>I would use a Quick Tunnel only for temporary testing because its random hostname
+        can change. The named tunnel is the better fit for a GitHub Pages frontend whose
+        build artifact contains a fixed backend URL.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
       <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
       <h2 class="question">Why does CI use a small deterministic retrieval fixture instead of rebuilding the full embedding index on every push?</h2>
       <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
       <div class="answer" hidden>
         <p>The full corpus requires millions of API embedding requests, so putting it in push-triggered CI would be slow, expensive, and nondeterministic. The fixture stores a few fixed vectors and expected IDs, then exercises the same semantic, BM25, and RRF code paths without external API calls.</p>
         <p>The trade-off is that the fixture cannot prove production-scale quality. That is why it complements, rather than replaces, the full golden-set evaluation: CI catches code regressions on every push, while MLflow-tracked full runs measure model and corpus changes as deliberate experiments.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Your deployment guide assumed Fedora on ARM — the server turned out to be Oracle Linux 7.9 on x86_64. How did you handle that?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>I stopped assuming and started detecting: `cat /etc/os-release` on first SSH showed Oracle Linux 7.9 with `ID_LIKE="fedora"` — the exact string that had misled the original guide into the wrong install path.</p>
+        <p>Each wrong assumption had a different fix. The RHEL 7-compatible OS means `yum` instead of `dnf`, and Docker never published a `rhel/7` repo, so the install uses the frozen `centos/7` repo and the last supported 20.10.x engine line — old, but everything the compose file uses is basic. The missing `docker-compose-plugin` rpm for el7 was worked around with the standalone Compose v2 binary as a CLI plugin, keeping the `docker compose` syntax intact. The architecture being x86_64 (E2.1.Micro) was good news: standard images and prebuilt wheels, no ARM source builds. And because Oracle Linux 7 is past vendor maintenance, the box is documented as a lab environment with a key-rotation caveat rather than presented as production-safe.</p>
+        <p>The honest limitation: the guide is now specific to this exact box. A maintained OL8/9 instance would revert to the modern dnf-based install — the guide says so explicitly rather than pretending one path fits every server.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">You embed with a 4096-dimension model — so why store only 1024 dimensions of each vector?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p><span class="misconception">Common misconception: a bigger stored vector is always a more accurate one.</span> Qwen3-Embedding is trained with Matryoshka Representation Learning, which forces all semantic information into the leading dimensions of each vector in order. Truncating to the first 1024 dims is a documented, near-lossless operation for retrieval — the model's own guidance recommends 1024 for retrieval tasks.</p>
+        <p>The real reason is storage economics: 3.45M verses at full 4096 dims would occupy roughly 80-100 GB, and `df -h` on the free-tier server showed only 19 GB free on its 39 GB root volume. Slicing to 1024 dims cuts that to ~20 GB — still borderline — so the vectors are also stored as float16 (verified working with this project's LanceDB), landing ~10 GB. The same slice must be applied to the query vector — truncating only one side would break cosine similarity between the query and the corpus entirely.</p>
+        <p>The honest limitation: truncation trades a small recall edge for a 4x storage cut. If the server ever gained real disk headroom and retrieval quality mattered more than cost, re-embedding at full width is a one-line change because corpus IDs are deterministic.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why did you index only ~350k curated verses instead of the full 3.4M-verse corpus?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because the demo is a finder for famous poetry, not an archive — a curated subset is both a product decision and a resource decision, and the measurements made it the right call.</p>
+        <p>First I measured the cheap filters: dropping single-hemistich verses and `...`-infested rows removes only ~2% of the corpus, because the preprocessing already merges most junk at the sadr+ajuz join — so those filters stay purely as a quality gate. The real lever is a poet whitelist — the classical canon, the most-quoted moderns, and the poets the eval set quotes — which keeps ~10% (~350k deduplicated verses): ~6-10 hours of API embedding instead of 2-3 days, ~1.5-2 GB in LanceDB instead of ~10 GB, and all 18 golden eval verses survive so the Phase 6 harness still works on the cloud table.</p>
+        <p>The honest tradeoff: a full index would recall long-tail poets the whitelist cannot. I chose curation because the product targets the verses people quote at weddings and condolences — those poets are all in the list — and a fast, precise demo beats a slow, exhaustive one. The whitelist is one set constant in `embed_corpus.py`; expanding it is a one-line change, and it is a cloud-only decision — the local full-corpus index is untouched.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">You removed a verse from your golden evaluation set — isn't that just making your tests pass?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p><span class="misconception">Common misconception: shrinking an eval set to fit a change is test-cheating.</span> That would be true if a failing case had been deleted. Here the entry was wrong before any filtering existed: it tagged "بانت سعاد" to the *genre* "المدائح النبوية", not to a poet, so the retrieval pipeline could never match it by poet metadata — and its source row also fails the new completeness filter (ellipsis/truncated text). It was a mislabeled test case, not a failing one.</p>
+        <p>The audit trail is the defense: I measured first — after curation, 18/18 of the remaining golden verses survive and are retrievable — and the removal is logged in PROGRESS.md with the reason. Nothing that could pass was deleted; the harness works unmodified against the curated cloud table.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Your EMBED_LIMIT used to mean "first N rows of the dataset." Why did that break with filtering, and what did you change?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because "first N" was resolved against the raw dataset before any filtering. Once the pipeline could drop rows (whitelist + completeness), a row-based cap silently re-interpreted itself as "first N rows that survive the filters" — and since the whitelist keeps only ~10% of the corpus, that is N *successful* whitelist matches, which in the worst case is zero poems. The smoke test would have pretended to embed "1,000 verses" while actually embedding none.</p>
+        <p>The fix came with the streaming rewrite: the scan counts only *matching* poems, so EMBED_LIMIT=1000 reliably means 1,000 whitelisted, quality-passing poems (~22k verses). Streaming additionally keeps peak memory flat over the 254,630-row crawl, which is what makes the scan runnable on the 1 GB cloud box at all.</p>
         <div class="rate-btns">
           <button class="rate-btn rate-good" type="button">Got it</button>
           <button class="rate-btn rate-review" type="button">Review again</button>

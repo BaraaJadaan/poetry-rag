@@ -43,6 +43,30 @@ from preprocess import run_pipeline
 LANCE_DIR     = "./lancedb"
 CLASSICAL_ONLY = True    # drop عامي/شعبي/'-' rows (see preprocess.py for rationale)
 N_CTX         = 512      # model context window — verses are 10-30 tokens; 512 is ample
+
+# Cloud-only corpus curation: the full 3.4M-verse corpus is 98% clean after the
+# preprocessing joins, so completeness filters barely shrink it. The real size
+# lever is a poet whitelist — the classical canon plus the most-quoted moderns
+# plus the poets the eval set quotes — which keeps ~10% of the corpus, keeps
+# 18/19 golden eval verses, and makes embedding time (~6-10h), storage (~1.5 GB
+# at 1024-dim float16), and query latency manageable on the 1 GB free-tier VM.
+# Golden-eval note: the "بانت سعاد" entry tagged to the *genre* "المدائح
+# النبوية" was removed from eval_set.json (its row also fails the quality
+# filter). See PROGRESS.md and DEPLOYMENT_GUIDE.md §10.
+POET_WHITELIST = {
+    "أبو الطيب المتنبي", "المتنبي", "البحتري", "أبو تمام", "أبو نواس",
+    "امرؤ القيس", "زهير بن أبي سلمى", "عنترة بن شداد", "الإمام الشافعي",
+    "علي بن أبي طالب", "السموأل", "ابن الرومي", "أبو العلاء المعري",
+    "الشريف الرضي", "ابن زيدون", "ابن الفارض", "البوصيري",
+    "أبو فراس الحمداني", "الخنساء", "قيس بن الملوح",
+    "نزار قباني", "محمود درويش", "أحمد شوقي", "جبران خليل جبران",
+    "أبو القاسم الشابي", "إيليا أبو ماضي", "بدر شاكر السياب",
+    "عبد الوهاب البياتي", "معروف الرصافي",
+    "ابن نباته المصري", "بشار عبد الهادي العاني", "أبو العباس الجراوي",
+    "ياسر الششتاوي", "يحيى الحمادي", "عبد الله بن علي الخليلي",
+    "جمال مرسي", "ميخائيل خير الله ويردي", "حسن الأفندي",
+    "خالد مصباح مظلوم", "المدائح النبوية",
+}
 import os
 from openai import OpenAI
 import time
@@ -71,7 +95,7 @@ except ImportError:
 
 schema = pa.schema([
     pa.field("id", pa.string()),
-    pa.field("vector", pa.list_(pa.float32(), 4096 if USE_OPENROUTER_EMBED else 2048)),
+    pa.field("vector", pa.list_(pa.float16(), 1024) if USE_OPENROUTER_EMBED else pa.list_(pa.float32(), 2048)),
     pa.field("text_index", pa.string()),
     pa.field("text_display", pa.string()),
     pa.field("poem_title", pa.string()),
@@ -111,7 +135,11 @@ if USE_OPENROUTER_EMBED:
 
     def embed_batch(texts: list[str]) -> list[np.ndarray]:
         """
-        Embed a batch of strings using OpenRouter API and return 4096-dim L2-normalised vectors.
+        Embed a batch of strings using OpenRouter API and return 1024-dim float16
+        vectors. Qwen3-Embedding is Matryoshka-trained: the first 1024 of its 4096 dims
+        retain retrieval quality, so we truncate, re-normalize, and store float16 to
+        keep the table ~8x smaller than the raw 4096-dim float32 output (the cloud
+        table must fit the E2.1.Micro's ~19 GB free disk).
         Includes an exponential backoff retry loop. If the whole batch fails (e.g. 403 Security Policy),
         falls back to embedding verse-by-verse, skipping problematic verses with a zero vector.
         """
@@ -127,9 +155,9 @@ if USE_OPENROUTER_EMBED:
                 
                 results = []
                 for item in response.data:
-                    vec = np.array(item.embedding, dtype=np.float32)
+                    vec = np.array(item.embedding, dtype=np.float32)[:1024]
                     norm = np.linalg.norm(vec)
-                    results.append(vec / norm if norm > 0 else vec)
+                    results.append((vec / norm if norm > 0 else vec).astype(np.float16))
                 return results
                 
             except Exception as e:
@@ -147,13 +175,13 @@ if USE_OPENROUTER_EMBED:
                 # Add a tiny sleep to avoid spamming the API on 1-by-1 fallback
                 time.sleep(0.1)
                 resp = client.embeddings.create(input=[text], model="qwen/qwen3-embedding-8b")
-                vec = np.array(resp.data[0].embedding, dtype=np.float32)
+                vec = np.array(resp.data[0].embedding, dtype=np.float32)[:1024]
                 norm = np.linalg.norm(vec)
-                results.append(vec / norm if norm > 0 else vec)
+                results.append((vec / norm if norm > 0 else vec).astype(np.float16))
             except Exception as inner_e:
                 print(f"\n[Warning] Skipping verse due to API error: {inner_e}")
                 # Return a zero vector for the problematic verse so the pipeline survives
-                results.append(np.zeros(4096, dtype=np.float32))
+                results.append(np.zeros(1024, dtype=np.float16))
                 
         return results
 else:
@@ -230,8 +258,15 @@ def chunk_id(text_index: str) -> str:
 
 
 # ── 7. Preprocess corpus ──────────────────────────────────────────────────────
+# Cloud mode: scan the dataset as a stream and keep only whitelisted poets and
+# complete, ellipsis-free verses. Local mode: unchanged full-corpus batch path.
 print(f"\nRunning preprocessing pipeline (classical_only={CLASSICAL_ONLY})...")
-chunks = run_pipeline(classical_only=CLASSICAL_ONLY, limit=args.limit)
+chunks = run_pipeline(
+    classical_only=CLASSICAL_ONLY,
+    limit=args.limit,
+    poet_whitelist=POET_WHITELIST if USE_OPENROUTER_EMBED else None,
+    quality_only=USE_OPENROUTER_EMBED,
+)
 total = len(chunks)
 
 # Deduplicate by ID in case the pipeline produces any duplicate texts

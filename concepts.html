@@ -585,7 +585,7 @@
       </p>
       <div class="why">
         <p class="label">Why it mattered here</p>
-        <p>The local development environment used a hardcoded Windows `.whl` file for `llama-cpp-python` to avoid compiling C++ on Windows. But when Dockerizing the app for an Oracle ARM (Linux) server, `uv` crashed because that path didn't exist in the container. By adding `sys_platform != 'win32'` and `sys_platform == 'win32'` markers to `pyproject.toml`, the exact same lockfile cleanly fetches from PyPI on the cloud and local disk on Windows.</p>
+        <p>The local development environment used a hardcoded Windows `.whl` file for `llama-cpp-python` to avoid compiling C++ on Windows. But when Dockerizing the app for an Oracle ARM (Linux) server, `uv` crashed because that path did not exist in the Linux runner. The durable fix was to remove the machine-specific wheel from project metadata, keep the local import lazy, install the wheel separately on Windows, and let the portable lockfile serve CI and Linux deployment.</p>
       </div>
     </article>
 
@@ -623,6 +623,103 @@
         <p>The full evaluation remains available for MLflow-tracked runs, but GitHub Actions
         must not spend API credits or wait hours on every push. CI checks the retrieval contract
         itself and the Docker build; production-scale embedding is a deliberate release task.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Cross-Origin Frontend and Backend</h2>
+      <p class="explain">
+        GitHub Pages can host the project's HTML, CSS, and JavaScript, but it cannot run
+        FastAPI or Docker. The browser therefore loads the static frontend from GitHub
+        Pages and sends its <code>/config</code> and streaming <code>/chat</code> requests
+        to the Oracle backend over HTTPS.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Because the two services have different origins, FastAPI needs an explicit CORS
+        allow-list. A named Cloudflare Tunnel gives the browser a stable HTTPS API hostname,
+        while the backend URL is public configuration and the OpenRouter key remains
+        server-side and is never shipped to the browser.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Matryoshka Representation Learning (MRL)</h2>
+      <p class="explain">
+        A training technique that forces an embedding model to pack all of its semantic information into the
+        leading dimensions of every vector, in order, so that truncating a 4096-dim vector down to 1024 dims
+        loses almost no retrieval quality. "Matryoshka" is the nesting-doll name: every prefix of the vector is
+        itself a usable embedding. The retrieval system can then store a fraction of the bytes while keeping
+        most of the semantic power, and the same slice must be applied to query vectors too — truncating only
+        one side would break cosine similarity between corpus and query.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The cloud corpus is 3.45M verses. At the model's default 4096 dimensions the LanceDB table would land
+        around 80-100 GB — impossible on the Oracle free tier's real disk, which `df -h` showed to be a 39 GB root
+        volume with only 19 GB free. Qwen3-Embedding is Matryoshka-trained, so slicing every vector to its first
+        1024 dims (on both the corpus and the query) shrinks the table to ~20 GB; storing float16 halves it again
+        to ~10 GB. The slice plus the float16 cast are two small changes in the embedder and retriever, and they
+        were made before the cloud table existed, so the smoke-test table is created in the final shape.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Storing all 4096 dimensions</p>
+        <p>Full-dimension storage would make the table ~8x larger for essentially zero retrieval gain at this
+        scale — and then slow brute-force scans at query time as well. Truncation trades a rounding-error recall
+        loss for a 4x storage cut, float16 another 2x; storing full width only starts paying off for tasks
+        needing extreme per-document detail, which verse retrieval does not.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Precision-oriented corpus curation</h2>
+      <p class="explain">
+        Shrinking a retrieval corpus down to the subset that actually serves the product's users, on purpose —
+        as a precision lever, not a shortcut. A corpus can be 98% "clean" yet still filled with rows nobody
+        will ever search for; dropping them deliberately improves precision per query while slashing embedding
+        time, storage, and query latency. The common mistake is reaching for completeness filters first and
+        discovering they barely move the size dial — the real lever is deciding which rows the product serves.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>All-verses indexing of 3.44M rows would take days of API calls on the free-tier VM. Measuring showed
+        completeness filters alone keep 98% of rows (only 20k orphans + 52k ellipsis rows exist), so they're kept
+        as a quality gate. The size lever is a 40-poet whitelist — classical canon, most-quoted moderns, and the
+        poets the eval set quotes — landing the corpus at ~10% (350-420k verses): ~6-10 hours of embedding,
+        ~1.5-2 GB in LanceDB, all 18 golden eval verses surviving, and no ANN index needed for acceptable query
+        latency.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Indexing everything</p>
+        <p>A full index maximizes recall breadth — any poet is searchable — but pays in days of API calls, ~10x
+        storage, and a mandatory ANN index, while the demo experience gets dominated by obscure rows. Curation
+        trades long-tail recall for speed, cost, and a defensible story: "we serve the canon of verses people
+        actually quote" — which is also the product's pitch.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Streaming pipeline over a row-ordered dataset</h2>
+      <p class="explain">
+        Processing a dataset one row at a time with an iterator instead of materializing it
+        (or a filtered copy of it) in memory. Each row is read, checked against the active
+        filters, kept or dropped, then discarded — peak memory stays flat no matter how many
+        rows pass or how many total rows exist. A second subtlety: when a step carries a cap
+        (e.g. "keep 1,000 poems"), the scan counts only rows that actually match — a dropped
+        row must not consume budget, or a heavy filter can silently starve the output to zero.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>The corpus is 254,630 poems (~3.4M verses). The pre-filtered pipeline loaded
+        everything, which is fine on the Windows box but not on the 1 GB cloud server. The old
+        <code>EMBED_LIMIT</code> also took the "first N rows of the dataset" — with the
+        whitelist dropping most of the corpus, "first N whitelisted rows" was effectively
+        zero. Streaming fixed both: the scan is memory-safe and the limit counts *matching*
+        poems. It is also the pattern the bounded-memory cloud indexer needs for the full run.</p>
       </div>
     </article>
 

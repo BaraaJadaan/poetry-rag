@@ -35,7 +35,12 @@ then
     echo "LanceDB table '$LANCE_TABLE' not found. Embedding the corpus..."
     echo "This may take a long time (hours/days) on a free CPU. Make sure this runs in the background!"
     # In cloud mode embed_corpus.py uses the OpenRouter embedding API.
-    uv run python embed_corpus.py
+    if [ -n "${EMBED_LIMIT:-}" ]; then
+        echo "EMBED_LIMIT=$EMBED_LIMIT: creating a bounded smoke-test index."
+        uv run python embed_corpus.py --limit "$EMBED_LIMIT"
+    else
+        uv run python embed_corpus.py
+    fi
 else
     echo "LanceDB table '$LANCE_TABLE' already exists. Skipping embedding."
 fi

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -186,6 +186,12 @@
 
     <p class="beat" data-phase="Embedding sanity check">We tested the voyage-4-nano Q8_0 GGUF model on a small sample of verses to verify its semantic performance on Arabic. We discovered and fixed a KV cache contamination bug in llama-cpp-python by manually clearing the cache, and verified that the model successfully separates distinct semantic domains like war and love, despite a minor quantization collapse on highly stylistically similar verses from the same poet.</p>
 
+    <p class="beat" data-phase="Full corpus embedding and vector store">We indexed all 3.4M verses into a vector database under deterministic SHA-256 verse IDs, making the job perfectly resumable after failures. ChromaDB's background compaction thread broke under the GPU write load, so we pivoted to LanceDB — an on-disk columnar format that needs no fragile compaction loop.</p>
+
+    <p class="beat" data-phase="Hybrid retrieval and reranking">We built the retriever as two engines plus a fuse: semantic vector search over LanceDB, BM25 keyword search through its built-in Tantivy full-text index, and Reciprocal Rank Fusion to combine both — with an IVF/PQ index keeping 3.4M-vector search under half a second.</p>
+
+    <p class="beat" data-phase="Evaluation and hard truths">The golden-set harness measured a hard reality: BM25's exact matching collapses on diacritics, and the local nano embedder scored 0% semantic recall because it cannot map Arabic synonyms. The empirical 0% justified re-architecting the embedding layer around Qwen3-Embedding, which jumped semantic Recall@1 to ~90% and proved the hybrid shell was healthy all along.</p>
+
     <p class="beat" data-phase="Phase 7: Multi-tool orchestration layer">We built a native ReAct loop using `llama-cpp-python` to give a local Qwen 3.5 9B model access to our hybrid retriever, meter analysis, and vocabulary tools, maintaining our 100% local, air-gapped deployment constraint while avoiding heavy frameworks like LangChain.</p>
 
     <p class="beat" data-phase="Phase 8: Web App & Deployment">We moved the agent from the CLI into a FastAPI backend with Server-Sent Events (SSE) for token streaming. We built a premium, RTL-aware frontend using vanilla HTML/CSS/JS, incorporating a dual-toggle architecture that lets the application seamlessly switch between local inference and the OpenRouter API without altering the core orchestration logic.</p>
@@ -194,75 +200,11 @@
 
     <p class="beat" data-phase="Phase 8.3: Dual-Environment Architecture Pivot">Having proven the 100% local, air-gapped architecture on Windows, we modified the system to dynamically toggle based on the deployment environment via `USE_OPENROUTER_EMBED` and `AGENT_MODEL_PATH`. Locally, it defaults to the Voyage semantic search and OmniCoder. On the Oracle ARM cloud deployment, it seamlessly pivots to use `qwen/qwen3-embedding-8b` via the OpenRouter API for embeddings, and `unsloth/Qwen3.5-2B-MTP-GGUF` for hyper-fast generation on the ARM CPU.</p>
 
-    
-    <p class="beat" data-phase="Phase 6: Evaluation & Hard Truths">
-      Ran an evaluation harness across 19 held-out semantic queries to measure Recall@1, Recall@5, and MRR. The evaluation laid bare two hard truths of Arabic RAG: BM25 failed entirely due to the presence of <i>Tashkeel</i> (diacritics) in the source text, and the local voyage-nano embedding model struggled to map Arabic semantic synonyms, resulting in a baseline 0.0% accuracy that forces a re-architecture of the embedding layer and text preprocessing.
-    </p>
-
     <p class="beat" data-phase="Phase 8.5: MLOps">We added MLflow-backed retrieval experiment tracking for full evaluations, recording embedding configuration, corpus/table identity, Recall@k, MRR, latency, and a JSON report. GitHub Actions now runs a deterministic LanceDB retrieval fixture and builds the Docker image on every push, keeping paid API embedding work out of the fast CI feedback loop.</p>
 
+    <p class="beat" data-phase="Phase 8.6: Static Frontend Deployment">We separated the static frontend from the FastAPI service: GitHub Pages publishes the HTML/CSS/JavaScript, while the Oracle backend remains responsible for retrieval, streaming chat, and the OpenRouter key. A build-time runtime configuration supplies the API URL, and FastAPI's CORS allow-list permits only the Pages origin. The cloud corpus was then cut to a curated ~350k-verse subset — a 40-poet whitelist plus a completeness filter, the only measure that actually shrinks the corpus to ~10% — keeping all 18 golden eval verses retrievable at ~6-10 hours of embedding and ~1.5-2 GB on the free tier.</p>
+
     <!-- NEW_BEAT_INSERTION_POINT: insert new <p class="beat"> elements immediately above this line, in the order phases actually happened. -->
-    <section class="phase-card">
-      <div class="phase-header">
-        <h2>Phase 4: Full Corpus Vector Embedding</h2>
-      </div>
-      <div class="phase-content">
-        <p>We indexed the entire 3.4 million verse corpus into a local vector database. We originally attempted to use ChromaDB, but the scale and GPU write speed (256-verse batches at 317 verses/second) completely broke Chroma's background compaction thread (<code>Failed to apply logs to the hnsw segment writer</code>). We pivoted to LanceDB, which is built for this scale and writes directly to an on-disk columnar format without fragile compaction loops.</p>
-        
-        <h3>Key Technical Wins:</h3>
-        <ul>
-          <li><strong>Deterministic Hashing:</strong> Every verse gets a deterministic SHA-256 ID, making the 3.4 million row job perfectly resumable (which saved us when the laptop died mid-run!).</li>
-          <li><strong>LanceDB Pivot:</strong> Smoothly transitioned away from ChromaDB when we hit its architectural limits, landing on a much more robust backend.</li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="phase-card">
-      <div class="phase-header">
-        <h2>Phase 5: The Hybrid Retriever</h2>
-      </div>
-      <div class="phase-content">
-        <p>We built <code>retriever.py</code>, the core search engine for the RAG pipeline. It connects to LanceDB and the local Voyage GGUF model to execute searches across 3.4 million rows in under 100 milliseconds.</p>
-        
-        <h3>Search Modalities:</h3>
-        <ul>
-          <li><strong>Semantic (Vector) Search:</strong> Finds verses with similar meaning, even if they share zero vocabulary.</li>
-          <li><strong>Keyword (FTS/BM25) Search:</strong> Natively utilizes LanceDB's Tantivy integration for exact phrase matching.</li>
-          <li><strong>Hybrid (RRF) Search:</strong> Executes both searches simultaneously and mathematically combines them using Reciprocal Rank Fusion (RRF), ensuring verses that match both the concept and the vocabulary rise to the absolute top.</li>
-        </ul>
-        
-        <h3>Technical Implementation Steps:</h3>
-        <ul>
-          <li><strong>Database Connection:</strong> Built a Python class that loads the 3.4M row LanceDB table and the local Voyage model into memory.</li>
-          <li><strong>The IVF_PQ Vector Index:</strong> A naive flat search against 3.4M vectors takes several seconds per query. We built an Inverted File with Product Quantization (IVF_PQ) index over the database, clustering similar vectors together and compressing their 2048 dimensions into 64 bytes. This brought semantic search latency down to ~450 milliseconds.</li>
-          <li><strong>RRF Algorithm:</strong> Instead of combining raw confidence scores, we used the standard `1 / (60 + rank)` formula to blend results purely based on their relative ranking from both engines.</li>
-        </ul>
-      </div>
-    </section>
-
-    <section class="phase-card">
-      <div class="phase-header">
-        <h2>Phase 6: Evaluation & The Model Upgrade</h2>
-      </div>
-      <div class="phase-content">
-        <p>To prove the engine works, we built an evaluation dataset (Golden Set) of 19 famous verses paired with realistic semantic queries (e.g., querying <em>"الفروسية والشجاعة وركوب الخيل في الليل"</em> and expecting it to return Mutanabbi's <em>"الخيل والليل والبيداء تعرفني"</em>). We ran a test harness measuring Recall@1, Recall@5, and Mean Reciprocal Rank (MRR).</p>
-        
-        <h3>Initial Baseline (Voyage-nano):</h3>
-        <p>We originally chose the <code>voyage-4-nano-gguf</code> model for its 100% local, air-gapped privacy and incredible speed. However, the evaluation laid bare a hard truth of Arabic RAG:</p>
-        <ul>
-          <li><strong>Keyword (FTS):</strong> 52.6% Recall@5. An excellent baseline since our queries intentionally used overlapping synonyms.</li>
-          <li><strong>Semantic (Vector):</strong> 0.0% Recall. We discovered that the nano model completely lacked the deep linguistic mapping to connect Arabic synonyms when there was zero keyword overlap.</li>
-          <li><strong>Hybrid (RRF):</strong> 42.1% Recall@5. Because our Semantic signal was effectively random noise, the Reciprocal Rank Fusion actually <strong>degraded</strong> the excellent Keyword signal.</li>
-        </ul>
-
-        <h3>The Architectural Pivot (Qwen3):</h3>
-        <p>Instead of accepting the 0% semantic baseline, we used this empirical data to justify upgrading the embedding layer. We dynamically pivoted the architecture to use <code>qwen/qwen3-embedding-8b</code> via the OpenRouter API—a massive model specifically trained on multilingual and Arabic text.</p>
-        <ul>
-          <li><strong>The Result:</strong> Semantic Recall jumped immediately from 0% to <strong>~90% Recall@1</strong>.</li>
-          <li><strong>The Lesson:</strong> This proved that our custom hybrid RAG architecture and LanceDB vector store were fundamentally perfect. The bottleneck was entirely the local embedding model's linguistic capability.</li>
-        </ul>
-      </div>
-    </section>
 
   </main>
 

@@ -4,7 +4,8 @@ services:
   web:
     build: .
     ports:
-      - "8000:8000"
+      # Cloudflared is the public entry point. Keep FastAPI local to the VM.
+      - "127.0.0.1:8000:8000"
     volumes:
       # Use named volumes to persist data across container restarts
       - lancedb_data:/app/lancedb
@@ -15,10 +16,12 @@ services:
       - CLOUD_DEPLOYMENT=true
     restart: unless-stopped
 
-  # Cloudflare Tunnel to expose the web service securely without opening firewall ports
+  # Remotely-managed Cloudflare Tunnel. The token comes from the server's .env file.
   cloudflared:
     image: cloudflare/cloudflared:latest
-    command: tunnel --url http://web:8000 --no-autoupdate
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN}
     restart: unless-stopped
     depends_on:
       - web
