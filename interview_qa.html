@@ -882,17 +882,17 @@
 
     <article class="qa-card" data-category="technical">
       <p class="eyebrow"><span class="tag">Deployment</span><span class="num"></span></p>
-      <h2 class="question">Why did you use a named Cloudflare Tunnel instead of putting the Oracle IP and port directly in the frontend?</h2>
+<h2 class="question">Why did you use an ngrok static domain instead of putting the Oracle IP and port directly in the frontend?</h2>
       <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
       <div class="answer" hidden>
         <p>The frontend needs a stable HTTPS origin, but exposing the FastAPI port directly
-        would require opening and maintaining both the Fedora firewall and Oracle network
-        rules. A named Cloudflare Tunnel gives the backend a stable hostname and keeps the
-        origin port private; Cloudflared connects to the internal Docker service at
+        would require opening and maintaining both the Oracle network and OS firewall
+        rules. An ngrok static domain gives the backend a permanent HTTPS hostname and
+        keeps the origin port private; ngrok connects to the internal Docker service at
         <code>http://web:8000</code>.</p>
-        <p>I would use a Quick Tunnel only for temporary testing because its random hostname
-        can change. The named tunnel is the better fit for a GitHub Pages frontend whose
-        build artifact contains a fixed backend URL.</p>
+        <p>I would use an ephemeral tunnel URL only for temporary testing because its random
+        hostname can change. The static domain is the better fit for a GitHub Pages frontend
+        whose build artifact contains a fixed backend URL.</p>
         <div class="rate-btns">
           <button class="rate-btn rate-good" type="button">Got it</button>
           <button class="rate-btn rate-review" type="button">Review again</button>

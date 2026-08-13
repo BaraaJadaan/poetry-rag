@@ -4,7 +4,7 @@ services:
   web:
     build: .
     ports:
-      # Cloudflared is the public entry point. Keep FastAPI local to the VM.
+      # ngrok is the public entry point. Keep FastAPI local to the VM.
       - "127.0.0.1:8000:8000"
     volumes:
       # Use named volumes to persist data across container restarts
@@ -16,12 +16,13 @@ services:
       - CLOUD_DEPLOYMENT=true
     restart: unless-stopped
 
-  # Remotely-managed Cloudflare Tunnel. The token comes from the server's .env file.
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run
+  # ngrok exposes FastAPI over HTTPS with a stable URL. The free plan includes
+  # one permanent static domain; token and domain come from the server's .env.
+  ngrok:
+    image: ngrok/ngrok:latest
+    command: http --url=${NGROK_STATIC_DOMAIN} web:8000
     environment:
-      TUNNEL_TOKEN: ${CLOUDFLARED_TUNNEL_TOKEN}
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
     restart: unless-stopped
     depends_on:
       - web

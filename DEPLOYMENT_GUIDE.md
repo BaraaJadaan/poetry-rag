@@ -42,7 +42,7 @@ at once. The safe first deployment is a small smoke test:
 1. Install Docker and start the app.
 2. Embed a small sample (`EMBED_LIMIT=1000` — that is 1,000 *poems*, ~22k verses, a
    few minutes of API calls), through OpenRouter.
-3. Confirm the API, database, Cloudflare tunnel, and server Docker setup work.
+3. Confirm the API, database, ngrok tunnel, and server Docker setup work.
 4. Later, run the curated corpus (~420k verses, 6-10 hours) as a bounded-memory
    background job before considering anything larger.
 
@@ -164,7 +164,8 @@ Use this content for the first smoke deployment:
 opentouter_api=YOUR_OPENROUTER_API_KEY
 EMBED_LIMIT=1000
 FRONTEND_ORIGINS=https://baraajadaan.github.io
-CLOUDFLARED_TUNNEL_TOKEN=YOUR_CLOUDFLARE_TUNNEL_TOKEN
+NGROK_AUTHTOKEN=YOUR_NGROK_AUTHTOKEN
+NGROK_STATIC_DOMAIN=yoursubdomain.ngrok-free.dev
 ```
 
 `CLOUD_DEPLOYMENT=true` is already set by `docker-compose.yml`, so the container uses
@@ -206,61 +207,48 @@ minutes of API calls). When it finishes, the FastAPI service starts.
 The database and models are stored in Docker named volumes, so they survive a normal
 container restart.
 
-## 6. Create a stable Cloudflare backend URL
+## 6. Expose the backend with ngrok
 
-The GitHub Pages frontend needs a backend URL that does not change after a restart. For
-the named tunnel route below, you need a domain/zone managed by Cloudflare. If you do not
-have one, you can use the temporary Quick Tunnel described later, but the GitHub Pages
-site will stop working whenever its random URL changes.
+The GitHub Pages frontend needs a backend URL that does not change after a
+restart. ngrok's free plan gives one permanent static domain (`*.ngrok-free.dev`)
+with automatic HTTPS — signup is email-only, no credit card required. (The free
+plan caps traffic at 20,000 requests/month and 1 GB transfer, plenty for a demo;
+browser page visits may show a one-time ngrok interstitial, but plain API calls
+pass through.)
 
-In the [Cloudflare dashboard](https://dash.cloudflare.com/):
+1. Sign up at [ngrok.com](https://ngrok.com/) (email only).
+2. In the dashboard, open **Your Authtoken** and copy the token.
+3. In the dashboard, open **Domains**: the free plan assigns you one static
+   domain (e.g. `abc-def1-ngrok.ngrok-free.dev`). Copy it exactly, `.ngrok-free.dev`
+   extension included.
+4. Put both values in the server's `.env` (Section 4) — token and domain, never
+   committed to GitHub.
 
-1. Go to **Networking → Tunnels** and select **Create a tunnel**.
-2. Name it `poetry-rag-api` and create it.
-3. Choose **Docker** as the connector.
-4. Copy only the tunnel token from the Docker command. Do not commit it to GitHub.
-5. Add a **Published application** route for the tunnel.
-6. Choose a hostname such as `poetry-api.example.com`.
-7. Set the service URL to `http://web:8000`.
-8. Save the route.
-
-The service URL must be `http://web:8000`, not `http://localhost:8000`: Cloudflared is a
-separate Compose container and reaches FastAPI through Docker's service name `web`.
-
-Put the copied token in the server's `.env`:
-
-```env
-CLOUDFLARED_TUNNEL_TOKEN=YOUR_CLOUDFLARE_TUNNEL_TOKEN
-```
-
-Then start the named tunnel:
+Start the tunnel and watch it connect:
 
 ```bash
-docker compose up -d --force-recreate cloudflared
-docker compose logs --tail=100 cloudflared
+docker compose up -d --force-recreate ngrok
+docker compose logs --tail=100 ngrok
 ```
 
-The tunnel should show a healthy/connected status in Cloudflare. Test the public backend:
+The log should show `started tunnel` with your domain. Test the public backend:
 
 ```bash
-curl https://poetry-api.example.com/config
+curl https://yoursubdomain.ngrok-free.dev/config
 ```
 
 You should receive JSON containing `cloud_deployment: true`.
 
-Cloudflare's official dashboard flow is documented here:
-[Create a remotely-managed tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/get-started/create-remote-tunnel/)
-
-## 7. Open the app through Cloudflare
+## 7. Open the app through ngrok
 
 Read the tunnel logs if you need to diagnose a connection:
 
 ```bash
-docker compose logs cloudflared
+docker compose logs ngrok
 ```
 
-Open the stable hostname you configured, such as `https://poetry-api.example.com`.
-The FastAPI port is bound only to `127.0.0.1` on the VM; Cloudflared is the public entry
+Open your static domain, such as `https://abc-def1-ngrok.ngrok-free.dev`. The
+FastAPI port is bound only to `127.0.0.1` on the VM; ngrok is the public entry
 point, so you do not need to open port 8000 in Oracle networking for this setup.
 
 Useful checks:
@@ -277,7 +265,7 @@ free -h
 ```bash
 docker compose restart
 docker compose logs --tail=100 web
-docker compose logs --tail=100 cloudflared
+docker compose logs --tail=100 ngrok
 docker compose down
 ```
 
@@ -302,7 +290,7 @@ Then, on GitHub:
 
 1. Open the repository's **Settings → Secrets and variables → Actions → Variables**.
 2. Create a repository variable named `BACKEND_URL`.
-3. Set its value to the stable backend URL, such as `https://poetry-api.example.com`.
+3. Set its value to the stable backend URL, such as `https://abc-def1-ngrok.ngrok-free.dev`.
 4. Open **Settings → Pages** and choose **GitHub Actions** as the source.
 5. Push a change to `main`, or run **Deploy frontend to GitHub Pages** manually from the
    Actions tab.
@@ -392,16 +380,19 @@ sudo systemctl restart docker
 
 If Oracle Linux 7 reports an iptables/firewalld backend problem after Docker
 installation, check Docker's CentOS/RHEL 7 troubleshooting material before
-changing firewall rules. Do not expose port 8000 publicly when the Cloudflare
+changing firewall rules. Do not expose port 8000 publicly when the ngrok
 tunnel is being used.
 
-If you need a temporary URL before setting up a domain, restore the Quick Tunnel command
-temporarily in `docker-compose.yml`:
+If you need a temporary URL before finishing the ngrok setup, verify the
+service locally first with `curl http://127.0.0.1:8000/health` (Section 7).
+For a zero-account public test URL, temporarily change the ngrok command in
+`docker-compose.yml`:
 
 ```yaml
-command: tunnel --url http://web:8000 --no-autoupdate
+command: http 8000
 ```
 
-Then run `docker compose up -d --force-recreate cloudflared` and read its random
-`trycloudflare.com` URL. This is for testing only; replace it with the named tunnel before
-configuring the GitHub Pages `BACKEND_URL` variable.
+Then run `docker compose up -d --force-recreate ngrok` and read the random
+`*.ngrok-free.app` URL from its logs. This is for testing only; replace it
+with your static domain before configuring the GitHub Pages `BACKEND_URL`
+variable.
