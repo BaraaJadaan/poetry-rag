@@ -390,4 +390,5 @@ print(f"{'='*55}")
 
 # Free Llama explicitly before Python interpreter tears down modules to prevent
 # 'NoneType object is not callable' in _exit_wrappers.
-del llm
+if "llm" in globals():
+    del llm
