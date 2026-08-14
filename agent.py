@@ -102,16 +102,19 @@ AVAILABLE_TOOLS = {
 }
 
 
-def resolve_tool(tool_name: str) -> str:
-    """Map the model's tool call onto a real tool, tolerating LLM typos
-    (e.g. 'search_vverses' -> 'search_verses'). Returns the input unchanged
-    when nothing resembles a known tool."""
+def resolve_tool(tool_name) -> str:
+    """Map the model's tool call onto a real tool, tolerating LLM typos and
+    stray characters. Qwen writes tool names inside Arabic RTL text, so the
+    emitted name can carry backticks, bidi marks, or Arabic suffixes (e.g.
+    '`search_vverses`' or 'search_vverses الأداة'). We therefore strip
+    everything that is not a latin letter or underscore, then compare."""
+    if not isinstance(tool_name, str):
+        return tool_name
     if tool_name in AVAILABLE_TOOLS:
         return tool_name
-    norm = tool_name.lower().replace(" ", "_").strip("_")
-    for candidate in AVAILABLE_TOOLS:
-        if norm in candidate.lower() or candidate.lower() in norm:
-            return candidate
+    norm = re.sub(r"[^a-zA-Z_]+", "", tool_name).lower()
+    if norm in AVAILABLE_TOOLS:
+        return norm
     # Qwen occasionally doubles a letter while emitting a tool name
     dedup = re.sub(r"(.)\1+", r"\1", norm)
     if dedup in AVAILABLE_TOOLS:
@@ -390,6 +393,7 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
         if tool_calls:
             for tool_call in tool_calls:
                 func_name = tool_call["function"]["name"]
+                print(f"[agent] raw tool call name: {func_name!r}")
                 try:
                     func_args = json.loads(tool_call["function"]["arguments"])
                 except:
