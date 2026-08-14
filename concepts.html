@@ -735,6 +735,15 @@
         therefore a property of the <em>query's phrasing</em>, not just of the corpus or the
         vector store.
       </p>
+      <p class="explain">
+        There is a second, opposite failure at the other extreme: a query that crams several
+        related concepts together (<code>الكبرياء والانتماء والعزة والفخر والشموخ والتراث</code>)
+        embeds as the <em>average</em> of everything it names, so the model retrieves whichever
+        meaning happens to dominate that blended vector — the <code>فخر</code> verses came back
+        for a request about <em>حبّ الوطن</em>. The reliable middle is one short sentence about a
+        single scene or feeling, e.g. <code>أشتاق إلى وطني وأنا بعيد عنه</code>. The lesson in
+        three words: <em>short enough to be focused, sentence-shaped to anchor meaning.</em>
+      </p>
       <div class="why">
         <p class="label">Why it mattered here</p>
         <p>With the same corpus and the same SQL filter, the two-word query
@@ -782,6 +791,70 @@
         fixed, but it shares nothing between keys — if one key is dead for hours, the user
         waits for hours. Rotation exploits the fact that OpenRouter quotas are independent
         per key, turning a multi-hour outage into a few hundred milliseconds of retry.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Storage-engine SQL filters have a narrow dialect — pre-filter vs. post-filter</h2>
+      <p class="explain">
+        Not every database can run every WHERE clause. LanceDB embeds a limited DataFusion
+        SQL subset for filter pushdown, and it rejects things mainstream SQL takes for granted
+        — the very first line of this project's fix crashed in production with
+        <code>Expression 'TRIM(text_display)' is not supported SQL in lance</code>. "Is the
+        predicate pushdown-supported" is therefore a real design question, not a formality.
+      </p>
+      <p class="explain">
+        Post-filtering is the portable fallback: fetch a deliberately <em>wide</em> candidate
+        window (here limit × 20) with no pushdown, then apply the real predicate in Python and
+        keep the top N. The wide window preserves recall — filtering after a too-tight fetch
+        silently starves the results. It costs more work per query but works on any store, and
+        it lets you normalize data the engine cannot (e.g. <code>rstrip()</code> trailing
+        whitespace that defeats literal LIKE patterns).
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Rows carry a trailing newline after the <code>***</code> hemistich separator, so
+        exact <code>LIKE</code> patterns about where <code>***</code> begins and ends silently
+        matched every row. The fix — TRIM() in SQL — compiled fine in unit tests but was
+        rejected by the real engine at query time. The shipped solution normalizes in pandas
+        (<code>str.rstrip()</code>) and applies the predicate as a Python function
+        (<code>is_full_verse</code>) over the candidate window. The regression that would have
+        caught this only tests the search path — the filter itself was validated against the
+        wrong execution layer.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">LLM tool calls are untrusted input — normalize, guard, never die</h2>
+      <p class="explain">
+        A model's tool call is generated text on its way to being JSON, not trusted code
+        dispatch: names get misspelled (<code>search_vverses</code>), wrapped in backticks,
+        dotted with bidi control characters and trailing Arabic words (the name is typed
+        inside RTL thinking), and the arguments can be malformed JSON. Treating
+        <code>function.name</code> as a dictionary key without ceremony is a one-line bug.
+        Defenses: normalize the name before lookup (strip anything that isn't a latin letter
+        or underscore, collapse doubled letters, fuzzy-match against known tools),
+        log the <em>raw</em> name for diagnosis, and wrap execution so any tool error becomes
+        a message back to the model instead of killing the request.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Qwen emitted <code>search_vverses</code> twice on the live chat. Without the fuzzy
+        resolver the whole turn degraded into an apology. And the deeper lesson came from the
+        failure mode it hides: an unguarded exception inside a tool call used to kill the SSE
+        stream mid-flight — the browser sees a dead connection ("Connection error.") instead
+        of an error it could display. Tools execute inside a guarded block now, so a crash
+        surfaces as a tool result the model can answer gracefully, and the stream never dies
+        from a search bug.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Retrying until the model names the tool correctly</p>
+        <p>We tried prompt hardening first — the model still misspelled it. Cheap, forgiving
+        dispatch is strictly better than fighting generation variance: it fixes the hostile
+        cases (bidi marks, backticks) a prompt can never fully prevent, and the raw-name log
+        keeps diagnosis possible when nothing matches.</p>
       </div>
     </article>
 

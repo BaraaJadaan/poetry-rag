@@ -1029,6 +1029,107 @@
       </div>
     </article>
 
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">Your fragment filter passed tests but crashed in production with <code>Expression 'TRIM(text_display)' is not supported SQL in lance</code>. What went wrong, and how did you fix it?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Two mistakes stacked. First, the underlying data: rows carry a trailing newline
+        after the <code>***</code> hemistich separator, so literal <code>LIKE</code> patterns
+        about where <code>***</code> begins and ends matched every row — the filter
+        <em>silently did nothing</em>. My fix wrapped the three patterns in
+        <code>TRIM()</code>… which is where the second mistake lived: LanceDB only supports a
+        narrow SQL subset for filter pushdown and rejects string functions entirely. The unit
+        test never exercised the filter, so the broken SQL shipped and blew up at the first
+        real query.</p>
+        <p>The fix is a Python post-filter: fetch a wide candidate window (limit × 20) with no
+        pushdown, then <code>str.rstrip()</code> the rows in pandas and apply the predicate as
+        a normal function before keeping the top N. The wide window preserves recall — a
+        too-tight fetch plus filtering silently starves results. The durable lesson: validate
+        filters against the real execution layer (the actual engine, the actual data shape),
+        not just the query path.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why filter fragments at query time instead of just deleting those rows from the table?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because the table is expensive to rebuild and the filter is cheap to run. Deleting
+        rows in LanceDB is a full-table rewrite (the cloud table is ~355k vectors), and any
+        cleanup pass is one more thing to get wrong on a 1 GB box. A post-filter costs one
+        pass over a few thousand candidate rows per query — negligible next to the semantic
+        search itself.</p>
+        <p>Keeping the rows also preserves options: the judgment of "what is a fragment" lives
+        in code (<code>is_full_verse</code>), not in destructive data surgery, so we can
+        tune it without re-embedding anything. The trade is per-query CPU and a slightly wider
+        fetch — acceptable here; if it ever wasn't, the natural next step is an embedding-time
+        label instead of a query-time predicate.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Architecture</span><span class="num"></span></p>
+      <h2 class="question">The model called your tool <code>search_vverses</code> — a typo. What is your robustness story for model-generated tool calls?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Model tool calls are generated text on the way to being JSON, so they're treated
+        as untrusted input. Dispatch goes through a resolver that normalizes the name —
+        strips everything that isn't a latin letter or underscore (Qwen types the name inside
+        Arabic RTL thinking, so backticks, bidi marks, and trailing Arabic words all show up),
+        collapses doubled letters (<code>search_vverses</code> → <code>search_verses</code>),
+        and finally falls back to difflib similarity against the known tool list. The raw name
+        is logged with <code>repr()</code> so a miss is diagnosable.</p>
+        <p>Two more layers. Prompt hardening states the exact tool name, but the model still
+        misspelled it — dispatch forgiveness beats prompt luck. And the whole execution sits
+        in a guarded block: a tool that throws produces a tool result the model can answer
+        from, instead of an exception killing the SSE stream mid-flight (which the browser
+        reports as a dead connection). Never let a retrieval bug look like an outage.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="general">
+      <p class="eyebrow"><span class="tag">Ops &amp; Tooling</span><span class="num"></span></p>
+      <h2 class="question">Walk me through the build-and-deploy pipeline in plain terms.</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Three environments. <strong>Local:</strong> the repo on a dev machine runs
+        everything on-device (own embedder, own model). <strong>Server:</strong> an Oracle
+        Linux VM runs the backend as a Docker container — the Dockerfile bakes a snapshot of
+        the code + dependencies into an image, and <code>docker compose</code> starts that
+        image plus an ngrok sidecar. ngrok is a tunnel: it gives the machine a public HTTPS
+        URL that forwards into localhost:8000, no firewall changes. <strong>GitHub Pages:</strong>
+        hosts the static frontend only (no backend allowed there).</p>
+        <p>Two automation paths. <strong>CI:</strong> on every push, GitHub Actions runs the
+        regression tests against a tiny in-memory LanceDB fixture — no API keys, no models, a
+        few seconds — and builds the Docker image to prove it compiles. This is the robot that
+        catches bugs before they reach the server (it caught a scope-shadowing bug for us).
+        <strong>CD for the frontend:</strong> when files under <code>frontend/</code> change,
+        the Pages workflow re-deploys them and injects the backend URL into the runtime config
+        via <code>sed</code>. The backend has no CD: Python changes need a manual
+        <code>git pull && docker compose build && docker compose up -d web</code> because the
+        code is baked into the image at build time. Secrets live in server-side
+        <code>.env</code> (injected at runtime by compose), never in the image or the repo.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
     <!-- NEW_QA_INSERTION_POINT: insert new <article class="qa-card"> blocks immediately above this line, in the order the underlying decisions were made. -->
   </main>
 
