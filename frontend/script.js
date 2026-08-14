@@ -237,7 +237,9 @@ async function sendMessage() {
         if (answerRaw.trim()) answerEl.innerHTML = marked.parse(answerRaw);
 
         conversation.push({ role: 'assistant', content: fullRawContent });
-        if (answerRaw.trim()) saveToCache(text, answerRaw, thinkingRaw);
+        // Save even when only the thinking block arrived (e.g. the stream died
+        // before the answer) so partial sessions survive a reload.
+        if (answerRaw.trim() || thinkingRaw.trim()) saveToCache(text, answerRaw, thinkingRaw);
 
     } catch (err) {
         showSpinner(false);

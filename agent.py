@@ -377,11 +377,20 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                 
                 yield f"data: {json.dumps({'tool_executing': func_name, 'args': func_args})}\n\n"
                 
-                if func_name in AVAILABLE_TOOLS:
-                    func = AVAILABLE_TOOLS[func_name]
-                    tool_result = func(**func_args)
-                else:
-                    tool_result = f"Error: Tool {func_name} not found."
+                try:
+                    if func_name in AVAILABLE_TOOLS:
+                        func = AVAILABLE_TOOLS[func_name]
+                        tool_result = func(**func_args)
+                    else:
+                        tool_result = f"Error: Tool {func_name} not found."
+                except Exception as tool_e:
+                    # A tool crash must never kill the SSE stream mid-flight
+                    # (the browser would report a dead connection). Surface the
+                    # error as a tool result so the model can answer gracefully.
+                    print(f"[agent] tool {func_name} failed: {tool_e}")
+                    import traceback
+                    traceback.print_exc()
+                    tool_result = f"Error while running tool '{func_name}': {tool_e}"
                 
                 messages.append({
                     "role": "user",
