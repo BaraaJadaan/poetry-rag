@@ -3,6 +3,7 @@ import sys
 import os
 import asyncio
 import re
+import difflib
 from retriever import HybridRetriever, is_full_verse
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -100,6 +101,29 @@ AVAILABLE_TOOLS = {
     "gloss_vocabulary": gloss_vocabulary
 }
 
+
+def resolve_tool(tool_name: str) -> str:
+    """Map the model's tool call onto a real tool, tolerating LLM typos
+    (e.g. 'search_vverses' -> 'search_verses'). Returns the input unchanged
+    when nothing resembles a known tool."""
+    if tool_name in AVAILABLE_TOOLS:
+        return tool_name
+    norm = tool_name.lower().replace(" ", "_").strip("_")
+    for candidate in AVAILABLE_TOOLS:
+        if norm in candidate.lower() or candidate.lower() in norm:
+            return candidate
+    # Qwen occasionally doubles a letter while emitting a tool name
+    dedup = re.sub(r"(.)\1+", r"\1", norm)
+    if dedup in AVAILABLE_TOOLS:
+        return dedup
+    matches = difflib.get_close_matches(norm, AVAILABLE_TOOLS, n=1, cutoff=0.6)
+    if matches:
+        return matches[0]
+    matches = difflib.get_close_matches(dedup, AVAILABLE_TOOLS, n=1, cutoff=0.6)
+    if matches:
+        return matches[0]
+    return tool_name
+
 # The JSON schema we pass to the LLM so it knows what tools exist
 TOOLS_SCHEMA = [
     {
@@ -165,7 +189,7 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
         system_prompt = (
             "أنت باحث متخصص في الشعر العربي الكلاسيكي. قواعدك الصارمة:\n"
             "\n"
-            "1. لا تقتبس أبياتاً من ذاكرتك أبداً — يجب استخدام أداة search_verses أولاً دائماً.\n"
+            "1. لا تقتبس أبياتاً من ذاكرتك أبداً — يجب استخدام أداة search_verses أولاً دائماً. استدعِ الأداة بالاسم الحرفي exact: search_verses (بحرف v واحد فقط، دون أي خطأ إملائي).\n"
             "2. عند البحث: اكتب جملة طبيعية كاملة بالعربية تصف الموقف أو الشعور أو المعنى الذي يبحث عنه المستخدم، مثال صحيح: 'أجلس وحدي في الليل وأشعر بالحزن الشديد' — ولا تبحث عن أبيات بعينها أو شعراء بعينهم.\n"
             "3. لا تقدم للمستخدم أبداً أي أبيات غير مكتملة أو مجتزأة (يجب أن يكون البيت مكتملاً تماماً).\n"
             "4. كل تفكيرك وتحليلك يجب أن يكون داخل وسوم <think>...</think> فقط، باللغة العربية حصراً.\n"
@@ -374,8 +398,11 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                 yield f"data: {json.dumps({'tool_executing': func_name, 'args': func_args})}\n\n"
                 
                 try:
-                    if func_name in AVAILABLE_TOOLS:
-                        func = AVAILABLE_TOOLS[func_name]
+                    resolved = resolve_tool(func_name)
+                    if resolved in AVAILABLE_TOOLS:
+                        func = AVAILABLE_TOOLS[resolved]
+                        if resolved != func_name:
+                            print(f"[agent] fuzzy tool match: '{func_name}' -> '{resolved}'")
                         tool_result = func(**func_args)
                     else:
                         tool_result = f"Error: Tool {func_name} not found."
