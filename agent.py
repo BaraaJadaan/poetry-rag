@@ -223,7 +223,6 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                 OR_THINK_CLOSE = "</think>"
                 or_state = "before_think"
                 or_buf   = ""
-                or_answer_started = False
 
                 async for chunk in stream:
                     delta = chunk.choices[0].delta
@@ -249,17 +248,14 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                             if idx == -1:
                                 safe_len = max(0, len(or_buf) - len(OR_THINK_OPEN) + 1)
                                 if safe_len:
-                                    if not or_answer_started:
-                                        or_answer_started = True
-                                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
+                                    # Everything before the  response delimiter is
+                                    # reasoning — route it to the thinking drawer
+                                    # (turn 0) even if the opening tag was missing.
                                     yield f"data: {json.dumps({'content': or_buf[:safe_len]})}\n\n"
                                     or_buf = or_buf[safe_len:]
                                 break
                             else:
                                 if idx > 0:
-                                    if not or_answer_started:
-                                        or_answer_started = True
-                                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
                                     yield f"data: {json.dumps({'content': or_buf[:idx]})}\n\n"
                                 or_buf = or_buf[idx + len(OR_THINK_OPEN):]
                                 or_state = "in_think"
@@ -279,7 +275,6 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                                 or_buf = or_buf[idx + len(OR_THINK_CLOSE):]
                                 or_state = "after_think"
                                 yield f"data: {json.dumps({'turn_start': 1})}\n\n"
-                                or_answer_started = True
 
                         elif or_state == "after_think":
                             yield f"data: {json.dumps({'content': or_buf})}\n\n"
@@ -288,10 +283,9 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
 
                     await asyncio.sleep(0)
 
-                # Flush any tail
+                # Flush any tail: if the stream ended before a  response tag,
+                # everything is reasoning (turn 0) and stays in the drawer.
                 if or_buf.strip():
-                    if not or_answer_started:
-                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
                     yield f"data: {json.dumps({'content': or_buf})}\n\n"
 
             except Exception as e:

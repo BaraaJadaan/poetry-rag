@@ -99,8 +99,8 @@ userInput.addEventListener('input', () => {
 stopBtn.addEventListener('click', () => { if (currentAbortController) currentAbortController.abort(); });
 
 function setStreaming(active) {
-    sendBtn.style.display = active ? 'none' : 'block';
-    stopBtn.style.display = active ? 'block' : 'none';
+    sendBtn.style.display = active ? 'none' : 'flex';
+    stopBtn.style.display = active ? 'flex' : 'none';
 }
 
 async function sendMessage() {
