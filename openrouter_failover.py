@@ -115,6 +115,7 @@ async def async_chat_stream(model: str, messages: list, tools=None,
             client = openai.AsyncOpenAI(base_url=BASE_URL, api_key=keys[idx])
             kwargs.setdefault("model", model)
             kwargs.setdefault("messages", messages)
+            kwargs.setdefault("stream", True)
             if tools is not None:
                 kwargs["tools"] = tools
             stream = await client.chat.completions.create(**kwargs)
