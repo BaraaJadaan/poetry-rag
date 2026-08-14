@@ -42,6 +42,14 @@ TABLE_NAME = "ashaar_baits_qwen3" if USE_OPENROUTER_EMBED else "ashaar_baits"
 GGUF_REPO = "jsonMartin/voyage-4-nano-gguf"
 
 
+def is_full_verse(text) -> bool:
+    """Keep rows that contain '***' midsentence but are not fragment-marker
+    rows starting or ending with it. LanceDB's SQL planner rejects TRIM(), so
+    this predicate runs in Python after normalizing trailing whitespace."""
+    t = str(text).rstrip()
+    return "***" in t and not t.startswith("***") and not t.endswith("***")
+
+
 class HybridRetriever:
     def __init__(self, lance_dir: str = None, table_name: str = None,
                  query_embedder=None, ensure_fts: bool = True):
@@ -152,29 +160,43 @@ class HybridRetriever:
             norm = np.linalg.norm(proj)
             return proj / norm if norm > 0 else proj
 
-    def search_semantic(self, query: str, limit: int = 10, filter_sql: str = None) -> pd.DataFrame:
+    def search_semantic(self, query: str, limit: int = 10, filter_sql: str = None,
+                        filter_fn=None) -> pd.DataFrame:
         """Finds verses with similar semantic meaning using vector similarity."""
         emb = self.embed_query(query)
         builder = self.tbl.search(emb.tolist())
         if filter_sql:
             builder = builder.where(filter_sql)
-        return builder.limit(limit).to_pandas()
+        # LanceDB's SQL planner rejects functions like TRIM(), so callers that
+        # need normalized filtering pass a Python predicate (filter_fn) that we
+        # apply after fetching a wide candidate window.
+        candidate_limit = max(limit * 20, 500) if filter_fn else limit
+        df = builder.limit(candidate_limit).to_pandas()
+        if filter_fn is not None and not df.empty:
+            df = df[df["text_display"].str.rstrip().map(filter_fn)].head(limit)
+        return df.reset_index(drop=True)
 
-    def search_keyword(self, query: str, limit: int = 10, filter_sql: str = None) -> pd.DataFrame:
+    def search_keyword(self, query: str, limit: int = 10, filter_sql: str = None,
+                       filter_fn=None) -> pd.DataFrame:
         """Finds exact keywords using BM25 / Full Text Search."""
         builder = self.tbl.search(query, query_type="fts")
         if filter_sql:
             builder = builder.where(filter_sql)
-        return builder.limit(limit).to_pandas()
+        candidate_limit = max(limit * 20, 500) if filter_fn else limit
+        df = builder.limit(candidate_limit).to_pandas()
+        if filter_fn is not None and not df.empty:
+            df = df[df["text_display"].str.rstrip().map(filter_fn)].head(limit)
+        return df.reset_index(drop=True)
 
-    def search_hybrid(self, query: str, limit: int = 10, filter_sql: str = None) -> pd.DataFrame:
+    def search_hybrid(self, query: str, limit: int = 10, filter_sql: str = None,
+                      filter_fn=None) -> pd.DataFrame:
         """
         Combines Semantic and Keyword search using Reciprocal Rank Fusion (RRF).
         This guarantees that results matching BOTH exactly and conceptually rise to the top.
         """
         # 1. Get top 100 from both strategies to ensure good fusion overlap
-        df_sem = self.search_semantic(query, limit=100, filter_sql=filter_sql)
-        df_key = self.search_keyword(query, limit=100, filter_sql=filter_sql)
+        df_sem = self.search_semantic(query, limit=100, filter_sql=filter_sql, filter_fn=filter_fn)
+        df_key = self.search_keyword(query, limit=100, filter_sql=filter_sql, filter_fn=filter_fn)
         
         # 2. Assign RRF scores (score = 1 / (60 + rank))
         rrf_scores = {}

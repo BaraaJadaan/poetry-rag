@@ -3,7 +3,7 @@ import sys
 import os
 import asyncio
 import re
-from retriever import HybridRetriever
+from retriever import HybridRetriever, is_full_verse
 
 # ── Config ────────────────────────────────────────────────────────────────────
 # You can update this to point exactly to where your Qwen 3.5 9B GGUF is stored.
@@ -38,13 +38,9 @@ if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
 # (text_display starts with " ***" or ends with "*** ") or are single half-lines
 # without a separator at all. They embed into a tight cluster that attracts short
 # abstract queries and buries real verses, so they are excluded from retrieval.
-# TRIM() is required because stored rows carry trailing whitespace after the
-# separator, which would otherwise defeat exact LIKE patterns.
-FULL_VERSE_FILTER = (
-    "TRIM(text_display) LIKE '%***%' "
-    "AND TRIM(text_display) NOT LIKE '***%' "
-    "AND TRIM(text_display) NOT LIKE '%***'"
-)
+# Stored rows carry trailing whitespace after the separator, so the check must
+# normalize before matching (done in Python via is_full_verse: LanceDB's SQL
+# planner rejects TRIM()).
 
 def _verse_word_count(text) -> int:
     """Count real words: strips '***', punctuation, and standalone diacritics
@@ -56,7 +52,7 @@ def search_verses(query: str, limit: int = 3) -> str:
     """Searches the vector database for poetry verses matching the query."""
     print(f"  [Tool Execution] search_verses(query='{query}', limit={limit})")
     # Fetch a wide window to account for filtering, then keep only full verses.
-    results = retriever.search_hybrid(query, limit=limit * 20, filter_sql=FULL_VERSE_FILTER)
+    results = retriever.search_hybrid(query, limit=limit * 20, filter_fn=is_full_verse)
     if results.empty:
         return "No verses found matching the query."
     
