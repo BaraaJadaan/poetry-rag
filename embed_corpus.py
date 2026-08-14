@@ -122,16 +122,11 @@ print(f"LanceDB '{TABLE_NAME}': {already_indexed:,} docs already indexed")
 
 
 if USE_OPENROUTER_EMBED:
-    # ── 2. Initialize OpenRouter API ───────────────────────────────────────────────
-    api_key = os.getenv("opentouter_api", "").strip().strip("'\"")
-    if not api_key:
-        print("ERROR: opentouter_api environment variable not found. Cannot embed without API key.")
+    # ── 2. Initialize OpenRouter API (multi-key) ───────────────────────────────────
+    from openrouter_failover import openrouter_keys, embed_with_failover
+    if not openrouter_keys():
+        print("ERROR: no opentouter_api* environment variables found. Cannot embed without an API key.")
         sys.exit(1)
-
-    client = OpenAI(
-      base_url="https://openrouter.ai/api/v1",
-      api_key=api_key,
-    )
 
     def embed_batch(texts: list[str]) -> list[np.ndarray]:
         """
@@ -148,10 +143,7 @@ if USE_OPENROUTER_EMBED:
 
         for attempt in range(max_retries):
             try:
-                response = client.embeddings.create(
-                    input=texts,
-                    model="qwen/qwen3-embedding-8b"
-                )
+                response = embed_with_failover("qwen/qwen3-embedding-8b", texts)
                 
                 results = []
                 for item in response.data:
@@ -174,7 +166,7 @@ if USE_OPENROUTER_EMBED:
             try:
                 # Add a tiny sleep to avoid spamming the API on 1-by-1 fallback
                 time.sleep(0.1)
-                resp = client.embeddings.create(input=[text], model="qwen/qwen3-embedding-8b")
+                resp = embed_with_failover("qwen/qwen3-embedding-8b", [text])
                 vec = np.array(resp.data[0].embedding, dtype=np.float32)[:1024]
                 norm = np.linalg.norm(vec)
                 results.append((vec / norm if norm > 0 else vec).astype(np.float16))

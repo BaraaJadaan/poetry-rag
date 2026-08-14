@@ -723,6 +723,68 @@
       </div>
     </article>
 
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Query-phrasing sensitivity in semantic search</h2>
+      <p class="explain">
+        An embedding model maps input text to a point in a meaning space that is shaped by
+        its training distribution. That mapping is far better conditioned for full sentences
+        than for short abstract phrases: a complete sentence lands near other full sentences
+        with the same meaning, while a two-word phrase can drift toward <em>other short
+        strings</em> — including rows whose only virtue is being short. Retrieval quality is
+        therefore a property of the <em>query's phrasing</em>, not just of the corpus or the
+        vector store.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>With the same corpus and the same SQL filter, the two-word query
+        <code>الوحدة والشجن</code> returned one-hemistich fragments (the short-text cluster),
+        while the natural sentence <code>هجرني الأصدقاء وأصبحت وحيداً في ليل طويل</code>
+        returned المتنبي, أبو فراس, and أحمد شوقي. The fix was a one-line prompt rule: the
+        agent must phrase its <code>search_verses</code> query as a full Arabic sentence
+        describing the situation or feeling. Hybrid retrieval stays because BM25 still covers
+        the literal-token cases the semantic side is weak at.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Synonym query expansion</p>
+        <p>Expanding keywords with synonyms is the classic IR answer, but it risks drifting the
+        query away from the user's intent. A sentence-shaped query costs nothing and is
+        evidence-backed: the probe that showed the failure also showed the sentence form
+        succeeding against the identical corpus.</p>
+      </div>
+    </article>
+
+    <article class="entry" data-phase="Phase 8.6: Static Frontend Deployment">
+      <p class="eyebrow">ENTRY <span class="num"></span> · Phase 8.6: Static Frontend Deployment</p>
+      <h2 class="term">Shared-pool rate limits and multi-key failover</h2>
+      <p class="explain">
+        OpenRouter is an aggregator: one API in front of many upstream providers. A key that
+        is not bring-your-own-provider draws on the provider's <em>shared pool</em>, and when
+        that pool's quota is exhausted the upstream answers with HTTP 429 and
+        <code>provider_error_code: insufficient_quota</code> on
+        <code>upstream_provider_shared_pool</code> — a per-key, not per-endpoint, condition.
+        Multi-key failover is transparent client-side rotation: retry the identical request
+        with the next key, rotate <em>only</em> on 429 (a 400 or 500 is not a key problem and
+        will not succeed with another key), and remember which key last succeeded so healthy
+        keys are tried first and dead ones cost exactly one failed call each.
+      </p>
+      <div class="why">
+        <p class="label">Why it mattered here</p>
+        <p>Two of three keys were exhausted while a third worked — and the 429 surfaced
+        mid-chat as an error the user could see. The failover module serves both chat
+        generation and embedding calls, keys live only in server-side env vars
+        (<code>opentouter_api</code>, <code>opentouter_api2</code>, ...), and the healthy key
+        sits in the first variable so the container never burns a cold-start 429.</p>
+      </div>
+      <div class="versus">
+        <p class="label">vs. Backoff-and-wait on a single key</p>
+        <p>Retrying with exponential backoff on one key is the right move when the quota is
+        fixed, but it shares nothing between keys — if one key is dead for hours, the user
+        waits for hours. Rotation exploits the fact that OpenRouter quotas are independent
+        per key, turning a multi-hour outage into a few hundred milliseconds of retry.</p>
+      </div>
+    </article>
+
     <!-- NEW_ENTRY_INSERTION_POINT: insert new <article class="entry"> blocks immediately above this line, in the order concepts were introduced. -->
   </main>
 

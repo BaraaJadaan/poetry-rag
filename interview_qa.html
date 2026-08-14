@@ -987,6 +987,48 @@
       </div>
     </article>
 
+    <article class="qa-card" data-category="trick">
+      <p class="eyebrow"><span class="tag">Trick Question</span><span class="num"></span></p>
+      <h2 class="question">Your SQL filter was supposed to exclude one-hemistich fragments — so why did fragments keep appearing in the results?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p><span class="misconception">Common misconception: the filter was wrong or too slow.</span> The filter never matched anything at all. Rows are built as <code>sadr + " *** " + ajuz</code>, and stored rows carry trailing whitespace after the separator — so a fragment is <code>والعيون ***␣␣</code>, and my predicate <code>NOT LIKE '%*** '</code> was looking for a string ending in exactly <code>***␣</code>. The needle did not exist in the haystack, the predicate silently matched every row, and the filter was dead weight without ever raising an error.</p>
+        <p>The fix was a TRIM() around the same three predicates. The deeper lesson is about verification: I confirmed the filter shipped (grep found it in the container) but never confirmed it <em>fired</em> against real rows until a 3-query probe printed the results with the filter active. Also, filtering alone would not have been enough — the fragment cluster is where short queries embed, so the query-phrasing fix was equally necessary.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Technical Decision</span><span class="num"></span></p>
+      <h2 class="question">Why does your agent search with full Arabic sentences instead of keyword phrases?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>Because a controlled probe measured it. With the identical corpus and the identical SQL filter, the two-word query <code>الوحدة والشجن</code> returned 30/30 one-hemistich fragments (the short-text cluster), while the natural sentence <code>هجرني الأصدقاء وأصبحت وحيداً في ليل طويل</code> returned the canonical loneliness verses — المتنبي's <code>أوحدنَني ووجَدنَ حزنًا واحدًا</code>, أبو فراس, أحمد شوقي. The embedding model's meaning space is conditioned for sentences, not for abstract keyword pairs.</p>
+        <p>So agent prompt rule 2 now instructs the model to phrase every <code>search_verses</code> query as a full Arabic sentence describing the situation or feeling. Hybrid retrieval stays: the BM25 side still covers literal-token queries, and the prompt still forbids hunting for a specific verse or poet by name. This is a one-line prompt change that shipped with the retrieval filter, and the two fixes together are what moved the live answers from junk to the golden classics.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa-card" data-category="technical">
+      <p class="eyebrow"><span class="tag">Architecture</span><span class="num"></span></p>
+      <h2 class="question">How do you handle OpenRouter 429s without the user noticing?</h2>
+      <button class="reveal-btn" type="button" aria-expanded="false">Show answer</button>
+      <div class="answer" hidden>
+        <p>With transparent multi-key failover. OpenRouter keys without a bring-your-own-provider setup draw on the upstream provider's shared pool, and that quota is exhausted <em>per key</em> — two keys can be dead while a third works fine. When a request returns 429 (<code>insufficient_quota</code> on the shared pool), the failover module retries the identical request with the next key, and only a 429 triggers rotation: a 400 or 500 is not a key problem and would not succeed with a different key.</p>
+        <p>Three details matter. First, the last key that succeeded is remembered in-process, so healthy keys are tried first and a dead key costs exactly one failed connection per outage, not every request. Second, the keys are read from every <code>opentouter_api*</code> environment variable on the server — never the repo, never the browser. Third, both chat generation and query embedding go through the same rotation, so a quota hit cannot break the search step of the pipeline either. If every key is exhausted, the final error surfaces through the normal SSE error channel and the container logs show the rotations.</p>
+        <div class="rate-btns">
+          <button class="rate-btn rate-good" type="button">Got it</button>
+          <button class="rate-btn rate-review" type="button">Review again</button>
+        </div>
+      </div>
+    </article>
+
     <!-- NEW_QA_INSERTION_POINT: insert new <article class="qa-card"> blocks immediately above this line, in the order the underlying decisions were made. -->
   </main>
 

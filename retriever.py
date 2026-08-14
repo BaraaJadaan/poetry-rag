@@ -130,12 +130,11 @@ class HybridRetriever:
             return np.asarray(self.query_embedder(text), dtype=np.float32)
 
         if USE_OPENROUTER_EMBED:
-            """Embeds a single search query using OpenRouter."""
+            """Embeds a single search query using OpenRouter (multi-key failover)."""
+            import numpy as np
+            from openrouter_failover import embed_with_failover
             try:
-                response = self.client.embeddings.create(
-                    input=[text],
-                    model="qwen/qwen3-embedding-8b"
-                )
+                response = embed_with_failover("qwen/qwen3-embedding-8b", [text])
                 vec = np.array(response.data[0].embedding, dtype=np.float32)[:1024]
                 norm = np.linalg.norm(vec)
                 return vec / norm if norm > 0 else vec

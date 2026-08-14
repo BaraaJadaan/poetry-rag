@@ -204,17 +204,22 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
             if turn_index > 0:
                 yield f"data: {json.dumps({'turn_start': 0})}\n\n"
 
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+            from openrouter_failover import openrouter_keys, async_chat_stream
+            if not openrouter_keys(api_key):
+                yield f"data: {json.dumps({'error': 'OpenRouter API key missing in .env'})}\n\n"
+                return
+
             try:
                 # We restore tools=TOOLS_SCHEMA. Since we removed the XML tool prompt
                 # instructions for OpenRouter, Qwen will use its native tool calling
-                # capabilities properly, triggering delta.tool_calls.
-                stream = await client.chat.completions.create(
+                # capabilities properly, triggering delta.tool_calls. async_chat_stream
+                # retries the request across OpenRouter API keys on 429, so shared-pool
+                # quota hits never reach the user.
+                stream = async_chat_stream(
                     model="qwen/qwen3.7-flash",
                     messages=messages,
                     tools=TOOLS_SCHEMA,
-                    stream=True
+                    api_key=api_key,
                 )
 
                 # ── Real-time <think> splitter ────────────────────────────────────
