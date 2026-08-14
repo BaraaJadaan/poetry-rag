@@ -314,19 +314,15 @@ input:checked + .slider:before {
     direction: ltr;
 }
 
-/* Loading spinner */
-@keyframes spin {
-    to { transform: rotate(360deg); }
+/* Heartbeat pulse while streaming — the AI bubble fades out and back in
+   gently for as long as the response is running. */
+@keyframes heartbeat {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.985); }
 }
 
-.spinner {
-    width: 1.4rem;
-    height: 1.4rem;
-    border: 3px solid rgba(255, 255, 255, 0.15);
-    border-top-color: var(--primary);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin: 0.5rem 0;
+.message.assistant.pulsing {
+    animation: heartbeat 1.8s ease-in-out infinite;
 }
 
 /* Markdown Styles */

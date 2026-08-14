@@ -116,13 +116,11 @@ async function sendMessage() {
 
     const astEl = createMessageEl('assistant');
 
-    // ── Loading spinner ────────────────────────────────────────────────────────
-    // Visible while waiting for the first token (thinking) and while a tool
-    // (search_verses) is executing and no tokens are flowing.
-    const spinnerEl = document.createElement('div');
-    spinnerEl.className = 'spinner';
-    astEl.appendChild(spinnerEl);
-    const showSpinner = (show) => { spinnerEl.style.display = show ? '' : 'none'; };
+    // ── Heartbeat while streaming ─────────────────────────────────────────────
+    // The assistant bubble pulses gently (fade out → back in) for as long as
+    // the response is running: waiting for the first token, tool execution,
+    // and token streaming. Removed in `finally` when the stream ends.
+    astEl.classList.add('pulsing');
 
     // ── Thinking drawer (lazy) ────────────────────────────────────────────────
     let thinkingContentEl = null;
@@ -198,17 +196,12 @@ async function sendMessage() {
 
                 if (data.turn_start !== undefined) {
                     currentTurn = data.turn_start;
-                    // A turn is starting — the model is composing the next block
-                    // (thinking after the tool, or the final answer), so no tokens
-                    // are flowing yet. Spinner until the first chunk arrives.
-                    showSpinner(true);
                     // When a new answer-turn starts, close the thinking drawer
                     if (currentTurn >= 1 && thinkingContentEl) {
                         thinkingContentEl.classList.remove('open');
                     }
 
                 } else if (data.content) {
-                    showSpinner(false);
                     fullRawContent += data.content;
                     if (currentTurn === 0) {
                         appendThinking(data.content);
@@ -217,7 +210,6 @@ async function sendMessage() {
                     }
 
                 } else if (data.tool_executing) {
-                    showSpinner(true);
                     appendThinking(`\n[جاري تنفيذ الأداة: ${data.tool_executing}]\n`);
 
                 } else if (data.error) {
@@ -232,7 +224,6 @@ async function sendMessage() {
         }
 
         // Final state: collapse thinking, do one clean markdown render
-        showSpinner(false);
         if (thinkingContentEl) thinkingContentEl.classList.remove('open');
         if (answerRaw.trim()) answerEl.innerHTML = marked.parse(answerRaw);
 
@@ -242,7 +233,6 @@ async function sendMessage() {
         if (answerRaw.trim() || thinkingRaw.trim()) saveToCache(text, answerRaw, thinkingRaw);
 
     } catch (err) {
-        showSpinner(false);
         if (err.name === 'AbortError') {
             const note = document.createElement('p');
             note.className = 'stop-note';
@@ -254,6 +244,7 @@ async function sendMessage() {
             answerEl.textContent = 'Connection error.';
         }
     } finally {
+        astEl.classList.remove('pulsing');
         setStreaming(false);
         currentAbortController = null;
         window.scrollTo({ top: document.body.scrollHeight });
