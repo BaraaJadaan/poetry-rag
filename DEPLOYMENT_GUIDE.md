@@ -254,7 +254,7 @@ point, so you do not need to open port 8000 in Oracle networking for this setup.
 Useful checks:
 
 ```bash
-curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/config
 docker stats
 df -h
 free -h
@@ -384,7 +384,7 @@ changing firewall rules. Do not expose port 8000 publicly when the ngrok
 tunnel is being used.
 
 If you need a temporary URL before finishing the ngrok setup, verify the
-service locally first with `curl http://127.0.0.1:8000/health` (Section 7).
+service locally first with `curl http://127.0.0.1:8000/config` (Section 7).
 For a zero-account public test URL, temporarily change the ngrok command in
 `docker-compose.yml`:
 
