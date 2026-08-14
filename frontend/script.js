@@ -17,6 +17,18 @@ const CACHE_KEY = 'poetry_rag_chats';    // last-10 Q&A pairs
 
 marked.setOptions({ breaks: true, gfm: true });
 
+// ── Responsive placeholder ────────────────────────────────────────────────────
+// Textarea placeholders never wrap — use a compact hint on small screens so
+// the full sentence doesn't scroll/clip.
+const PLACEHOLDER_LONG = 'اكتب وصفاً أو شعوراً للبحث عن أبيات تناسبه... (مثال: الشوق والفراق)';
+const PLACEHOLDER_SHORT = 'صف شعورك لتجد أبياتاً تناسبه...';
+
+function applyPlaceholder() {
+    userInput.placeholder = window.innerWidth <= 640 ? PLACEHOLDER_SHORT : PLACEHOLDER_LONG;
+}
+applyPlaceholder();
+window.addEventListener('resize', applyPlaceholder);
+
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 function saveToCache(userText, answerText, thinkingText) {
     try {
