@@ -131,7 +131,6 @@ class HybridRetriever:
 
         if USE_OPENROUTER_EMBED:
             """Embeds a single search query using OpenRouter (multi-key failover)."""
-            import numpy as np
             from openrouter_failover import embed_with_failover
             try:
                 response = embed_with_failover("qwen/qwen3-embedding-8b", [text])
