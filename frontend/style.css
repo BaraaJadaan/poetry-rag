@@ -317,8 +317,8 @@ input:checked + .slider:before {
 /* Heartbeat pulse while streaming — the AI bubble fades out and back in
    gently for as long as the response is running. */
 @keyframes heartbeat {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.5; transform: scale(0.985); }
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
 }
 
 .message.assistant.pulsing {
