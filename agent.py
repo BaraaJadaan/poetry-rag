@@ -38,10 +38,12 @@ if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
 # (text_display starts with " ***" or ends with "*** ") or are single half-lines
 # without a separator at all. They embed into a tight cluster that attracts short
 # abstract queries and buries real verses, so they are excluded from retrieval.
+# TRIM() is required because stored rows carry trailing whitespace after the
+# separator, which would otherwise defeat exact LIKE patterns.
 FULL_VERSE_FILTER = (
-    "text_display LIKE '%***%' "
-    "AND text_display NOT LIKE ' ***%' "
-    "AND text_display NOT LIKE '%*** '"
+    "TRIM(text_display) LIKE '%***%' "
+    "AND TRIM(text_display) NOT LIKE '***%' "
+    "AND TRIM(text_display) NOT LIKE '%***'"
 )
 
 def _verse_word_count(text) -> int:
@@ -168,7 +170,7 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
             "أنت باحث متخصص في الشعر العربي الكلاسيكي. قواعدك الصارمة:\n"
             "\n"
             "1. لا تقتبس أبياتاً من ذاكرتك أبداً — يجب استخدام أداة search_verses أولاً دائماً.\n"
-            "2. عند البحث: استخدم كلمات مفتاحية تصف المعنى والموضوع، ولا تبحث عن أبيات بعينها أو شعراء بعينهم.\n"
+            "2. عند البحث: اكتب جملة طبيعية كاملة بالعربية تصف الموقف أو الشعور أو المعنى الذي يبحث عنه المستخدم، مثال صحيح: 'أجلس وحدي في الليل وأشعر بالحزن الشديد' — ولا تبحث عن أبيات بعينها أو شعراء بعينهم.\n"
             "3. لا تقدم للمستخدم أبداً أي أبيات غير مكتملة أو مجتزأة (يجب أن يكون البيت مكتملاً تماماً).\n"
             "4. كل تفكيرك وتحليلك يجب أن يكون داخل وسوم <think>...</think> فقط، باللغة العربية حصراً.\n"
             "5. بعد وسوم <think> مباشرة، اكتب إجابتك النهائية فقط باللغة العربية. يجب عليك اقتباس الأبيات كما وردت نصاً مع ذكر اسم الشاعر، ولا تقم بتلخيصها.\n"
