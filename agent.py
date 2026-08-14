@@ -222,14 +222,19 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                     api_key=api_key,
                 )
 
-                # ── Real-time <think> splitter ────────────────────────────────────
-                # States:  before_think → in_think → after_think
-                #   in_think content    → turn 0 SSE (thinking drawer)
-                #   after_think content → turn 1 SSE (answer area, may contain XML tool call)
-                OR_THINK_OPEN  = "<think>"
-                OR_THINK_CLOSE = "</think>"
+                # ── Real-time think-tag splitter ────────────────────────────────────
+                # States:  before_think -> in_think -> after_think
+                #   in_think content    -> turn 0 SSE (thinking drawer)
+                #   after_think content -> turn 1 SSE (answer area)
+                # Policy: content is REASONING only after the think opener is seen
+                # (drawer until the close tag). Content that never opens the tag is
+                # the ANSWER (turn 1) -- Qwen's post-tool pass often skips the tags
+                # entirely, and routing that to the drawer hides the final answer.
+                OR_THINK_OPEN  = '<think>'
+                OR_THINK_CLOSE = '</think>'
                 or_state = "before_think"
                 or_buf   = ""
+                answer_started = False
 
                 async for chunk in stream:
                     delta = chunk.choices[0].delta
@@ -255,15 +260,24 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
                             if idx == -1:
                                 safe_len = max(0, len(or_buf) - len(OR_THINK_OPEN) + 1)
                                 if safe_len:
-                                    # Everything before the  response delimiter is
-                                    # reasoning — route it to the thinking drawer
-                                    # (turn 0) even if the opening tag was missing.
+                                    # No think opener yet -- this is the ANSWER.
+                                    if not answer_started:
+                                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
+                                        answer_started = True
                                     yield f"data: {json.dumps({'content': or_buf[:safe_len]})}\n\n"
                                     or_buf = or_buf[safe_len:]
                                 break
                             else:
                                 if idx > 0:
+                                    # Untagged preamble before the opener: answer.
+                                    if not answer_started:
+                                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
+                                        answer_started = True
                                     yield f"data: {json.dumps({'content': or_buf[:idx]})}\n\n"
+                                if answer_started:
+                                    # Re-sync: tagged reasoning that follows a
+                                    # preamble belongs in the thinking drawer.
+                                    yield f"data: {json.dumps({'turn_start': 0})}\n\n"
                                 or_buf = or_buf[idx + len(OR_THINK_OPEN):]
                                 or_state = "in_think"
                                 # turn_start: 0 is already in effect (loop top or re-emit above)
@@ -290,11 +304,15 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
 
                     await asyncio.sleep(0)
 
-                # Flush any tail: if the stream ended before a  response tag,
-                # everything is reasoning (turn 0) and stays in the drawer.
+                # Flush any tail: if the stream ended before a close tag, the
+                # buffered text belongs to the state we are in. Untagged tail
+                # (before_think) is the answer; tagged tail is reasoning.
                 if or_buf.strip():
+                    if or_state == "before_think" and not answer_started:
+                        yield f"data: {json.dumps({'turn_start': 1})}\n\n"
                     yield f"data: {json.dumps({'content': or_buf})}\n\n"
 
+                print(f"[agent] pass {turn_index} done: state={or_state}, content_chars={len(full_content)}, tool_calls={len(tool_calls)}")
             except Exception as e:
                 yield f"data: {json.dumps({'error': str(e)})}\n\n"
                 return
