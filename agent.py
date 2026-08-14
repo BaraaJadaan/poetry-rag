@@ -34,16 +34,28 @@ if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
 
 # ── Tool Definitions (Python Functions) ───────────────────────────────────────
 
+# Free-verse / fragment rows in the cloud table have one empty hemistich
+# (text_display starts with " ***" or ends with "*** "). They embed into a tight
+# cluster that attracts short abstract queries and buries real verses, so they
+# are excluded from retrieval entirely.
+FULL_VERSE_FILTER = "text_display NOT LIKE ' ***%' AND text_display NOT LIKE '%*** '"
+
+def _verse_word_count(text) -> int:
+    """Count real words: strips '***', punctuation, and standalone diacritics
+    so short free-verse lines can't masquerade as full classical verses."""
+    cleaned = re.sub(r"[^\w\u0600-\u06FF\s]", " ", str(text).replace("*", " "))
+    return len([w for w in cleaned.split() if w.strip()])
+
 def search_verses(query: str, limit: int = 3) -> str:
     """Searches the vector database for poetry verses matching the query."""
     print(f"  [Tool Execution] search_verses(query='{query}', limit={limit})")
-    # Fetch extra to account for filtering
-    results = retriever.search_hybrid(query, limit=limit * 3)
+    # Fetch a wide window to account for filtering, then keep only full verses.
+    results = retriever.search_hybrid(query, limit=limit * 20, filter_sql=FULL_VERSE_FILTER)
     if results.empty:
         return "No verses found matching the query."
     
     # Filter out short fragments (free verse usually has very short lines, classical Amoudi has 6+ words)
-    results = results[results['text_display'].astype(str).str.split().str.len() >= 6]
+    results = results[results['text_display'].astype(str).apply(lambda s: _verse_word_count(s) >= 6)]
     results = results.head(limit)
     
     if results.empty:
