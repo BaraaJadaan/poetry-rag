@@ -198,7 +198,10 @@ async function sendMessage() {
 
                 if (data.turn_start !== undefined) {
                     currentTurn = data.turn_start;
-                    showSpinner(false);
+                    // A turn is starting — the model is composing the next block
+                    // (thinking after the tool, or the final answer), so no tokens
+                    // are flowing yet. Spinner until the first chunk arrives.
+                    showSpinner(true);
                     // When a new answer-turn starts, close the thinking drawer
                     if (currentTurn >= 1 && thinkingContentEl) {
                         thinkingContentEl.classList.remove('open');

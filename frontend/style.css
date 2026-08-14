@@ -254,7 +254,11 @@ button:disabled {
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
-    font-size: 0.9rem;
+    line-height: 0;
+}
+
+#send-btn svg, #stop-btn svg {
+    display: block;
 }
 
 

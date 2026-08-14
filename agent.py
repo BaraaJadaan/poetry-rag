@@ -35,10 +35,14 @@ if os.getenv("CLOUD_DEPLOYMENT", "false").lower() != "true":
 # ── Tool Definitions (Python Functions) ───────────────────────────────────────
 
 # Free-verse / fragment rows in the cloud table have one empty hemistich
-# (text_display starts with " ***" or ends with "*** "). They embed into a tight
-# cluster that attracts short abstract queries and buries real verses, so they
-# are excluded from retrieval entirely.
-FULL_VERSE_FILTER = "text_display NOT LIKE ' ***%' AND text_display NOT LIKE '%*** '"
+# (text_display starts with " ***" or ends with "*** ") or are single half-lines
+# without a separator at all. They embed into a tight cluster that attracts short
+# abstract queries and buries real verses, so they are excluded from retrieval.
+FULL_VERSE_FILTER = (
+    "text_display LIKE '%***%' "
+    "AND text_display NOT LIKE ' ***%' "
+    "AND text_display NOT LIKE '%*** '"
+)
 
 def _verse_word_count(text) -> int:
     """Count real words: strips '***', punctuation, and standalone diacritics
@@ -168,6 +172,8 @@ async def generate_response_stream(messages, use_openrouter=False, api_key=None)
             "3. لا تقدم للمستخدم أبداً أي أبيات غير مكتملة أو مجتزأة (يجب أن يكون البيت مكتملاً تماماً).\n"
             "4. كل تفكيرك وتحليلك يجب أن يكون داخل وسوم <think>...</think> فقط، باللغة العربية حصراً.\n"
             "5. بعد وسوم <think> مباشرة، اكتب إجابتك النهائية فقط باللغة العربية. يجب عليك اقتباس الأبيات كما وردت نصاً مع ذكر اسم الشاعر، ولا تقم بتلخيصها.\n"
+            "6. إذا كان المعنى المطلوب لا يكتمل ببيت واحد، فاقتبس أكثر من بيت واحد (2-3 أبيات) مكتملة حتى يكتمل المعنى.\n"
+            "7. يمكنك استدعاء أداة search_verses أكثر من مرة بأسئلة بحث مختلفة إذا كانت النتائج غير كافية، ثم اختر الأفضل منها.\n"
         )
         if not use_openrouter:
             system_prompt += (
