@@ -2,34 +2,20 @@ const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
-const backendToggle = document.getElementById('backend-toggle');
 
 const configuredApiBase = window.POETRY_RAG_CONFIG?.apiBaseUrl || '';
 const API_BASE_URL = configuredApiBase.replace(/\/+$/, '');
 const apiUrl = (path) => `${API_BASE_URL}${path}`;
 
+// Deployed on Pages (API_BASE_URL set) → always OpenRouter; same-origin local dev → local model.
+const useOpenRouter = API_BASE_URL.length > 0;
+
 let conversation = [];
 let currentAbortController = null;
-let toastTimer = null;
 
-const CACHE_KEY   = 'poetry_rag_chats';    // last-10 Q&A pairs
-const TOGGLE_KEY  = 'poetry_rag_backend';  // 'local' | 'openrouter'
+const CACHE_KEY = 'poetry_rag_chats';    // last-10 Q&A pairs
 
 marked.setOptions({ breaks: true, gfm: true });
-
-// ── Fetch Server Config ───────────────────────────────────────────────────────
-fetch(apiUrl('/config')).then(res => res.json()).then(config => {
-    if (config.cloud_deployment) {
-        const toggleContainer = document.querySelector('.toggle-container');
-        if (toggleContainer) {
-            toggleContainer.innerHTML = '<span></span>';
-        }
-        backendToggle.checked = true; // Force true internally
-    } else {
-        // Only restore from localStorage if NOT in cloud deployment
-        if (localStorage.getItem(TOGGLE_KEY) === 'openrouter') backendToggle.checked = true;
-    }
-}).catch(console.error);
 
 // ── Cache helpers ─────────────────────────────────────────────────────────────
 function saveToCache(userText, answerText, thinkingText) {
@@ -91,33 +77,6 @@ function loadCachedChats() {
 }
 
 // ── Refresh Toast ─────────────────────────────────────────────────────────────
-function showRefreshToast() {
-    // Remove any existing toast immediately
-    const existing = document.getElementById('refresh-toast');
-    if (existing) existing.remove();
-    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
-
-    const toast = document.createElement('div');
-    toast.id = 'refresh-toast';
-    const label = backendToggle.checked ? ' API (إنترنت)' : 'محلي (Local)';
-    toast.innerHTML = `
-        <span>تم التبديل إلى <strong>${label}</strong> — تحتاج الصفحة إلى إعادة تحميل لتطبيق التغيير</span>
-        <button class="toast-refresh-btn" onclick="location.reload()">تحديث الآن</button>
-    `;
-    document.body.appendChild(toast);
-
-    // Auto-dismiss after 6 seconds
-    toastTimer = setTimeout(() => {
-        toast.classList.add('hide');
-        toast.addEventListener('animationend', () => toast.remove(), { once: true });
-        toastTimer = null;
-    }, 6000);
-}
-
-backendToggle.addEventListener('change', () => {
-    localStorage.setItem(TOGGLE_KEY, backendToggle.checked ? 'openrouter' : 'local');
-    showRefreshToast();
-});
 
 function createMessageEl(role) {
     const el = document.createElement('div');
@@ -204,7 +163,7 @@ async function sendMessage() {
         const response = await fetch(apiUrl('/chat'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: conversation, use_openrouter: backendToggle.checked }),
+            body: JSON.stringify({ messages: conversation, use_openrouter: useOpenRouter }),
             signal: currentAbortController.signal
         });
 
