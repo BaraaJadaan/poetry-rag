@@ -1,7 +1,7 @@
 [project]
 name = "poetry-rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Production-grade Arabic Poetry RAG system with LanceDB hybrid retrieval and native ReAct agent"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
