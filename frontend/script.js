@@ -2,6 +2,7 @@ const messagesDiv = document.getElementById('messages');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
+const suggestionsBar = document.getElementById('suggestions');
 
 const configuredApiBase = window.POETRY_RAG_CONFIG?.apiBaseUrl || '';
 const API_BASE_URL = configuredApiBase.replace(/\/+$/, '');
@@ -16,6 +17,85 @@ let currentAbortController = null;
 const CACHE_KEY = 'poetry_rag_chats';    // last-10 Q&A pairs
 
 marked.setOptions({ breaks: true, gfm: true });
+
+// ── Quick suggestions ─────────────────────────────────────────────────────────
+const SUGGESTIONS = [
+    { label: 'عزة النفس والكرامة', prompt: 'أبيات عن عزة النفس والكرامة والترفع عن الدنايا' },
+    { label: 'الشوق والغربة', prompt: 'شعر عن الشوق والحنين وألم الغربة والبعد عن الوطن' },
+    { label: 'فخر وشجاعة المتنبي', prompt: 'أبيات للمتنبي في الفخر والشجاعة وركوب الخيل' },
+    { label: 'الحكمة وتجارب الأيام', prompt: 'أجمل ما قيل في الحكمة وتجارب الدهر والأيام' },
+    { label: 'الصبر عند الشدائد', prompt: 'أبيات عن الصبر وحسن الظن وتجاوز الشدائد والمحن' },
+    { label: 'الصداقة والوفاء', prompt: 'شعر عن الصداقة الصادقة ووفاء الأصحاب وإخلاصهم' },
+    { label: 'وصف الطبيعة والربيع', prompt: 'أبيات بديعة في وصف جمال الطبيعة والرياض والأزهار' },
+    { label: 'مرور العمر والشباب', prompt: 'أبيات عن مرور العمر والتحسر على أيام الشباب' },
+    { label: 'الغزل العفيف', prompt: 'أجمل أبيات الغزل العفيف والرقة والوجد' }
+];
+
+function initSuggestions() {
+    if (!suggestionsBar) return;
+    suggestionsBar.innerHTML = '';
+
+    let isDragging = false;
+    let startX = 0;
+    let scrollStart = 0;
+    let dragThresholdPassed = false;
+
+    SUGGESTIONS.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'suggestion-chip';
+        btn.textContent = item.label;
+        btn.title = item.prompt;
+
+        btn.addEventListener('click', (e) => {
+            if (dragThresholdPassed) return; // Prevent click if user dragged
+            if (currentAbortController) return; // Ignore while streaming
+            userInput.value = item.prompt;
+            userInput.style.height = 'auto';
+            userInput.style.height = Math.max(44, Math.min(160, userInput.scrollHeight)) + 'px';
+            sendMessage();
+        });
+
+        suggestionsBar.appendChild(btn);
+    });
+
+    // ── Mouse Drag-to-Scroll for PC ──────────────────────────────────────────
+    suggestionsBar.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        dragThresholdPassed = false;
+        startX = e.pageX;
+        scrollStart = suggestionsBar.scrollLeft;
+        suggestionsBar.classList.add('dragging');
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const delta = e.pageX - startX;
+        if (Math.abs(delta) > 5) {
+            dragThresholdPassed = true;
+        }
+        suggestionsBar.scrollLeft = scrollStart - delta;
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            suggestionsBar.classList.remove('dragging');
+            // reset drag threshold after short delay so click listener gets current state
+            setTimeout(() => { dragThresholdPassed = false; }, 50);
+        }
+    });
+
+    // ── Mouse Wheel horizontal scroll for PC ─────────────────────────────────
+    suggestionsBar.addEventListener('wheel', (e) => {
+        if (e.deltaY !== 0 && Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+            e.preventDefault();
+            // RTL scroll direction in modern browsers
+            suggestionsBar.scrollLeft += e.deltaY;
+        }
+    }, { passive: false });
+}
+initSuggestions();
 
 // ── Responsive placeholder ────────────────────────────────────────────────────
 // Textarea placeholders never wrap — use a compact hint on small screens so
@@ -63,7 +143,7 @@ function loadCachedChats() {
             drawerEl.className = 'thinking-drawer';
             const header = document.createElement('div');
             header.className = 'thinking-header';
-            header.innerHTML = '<span>⛙️</span><span>تفكير (Thinking)</span><span class="chevron">▾</span>';
+            header.innerHTML = '<span>⚙️</span><span>تفكير (Thinking)</span><span class="chevron">▾</span>';
             const contentEl = document.createElement('div');
             contentEl.className = 'thinking-content'; // collapsed (no "open" class)
             contentEl.textContent = thinking.replace(/<\/?(?:think|thinking|thought|tool_call|function)[^>]*>/gi, '').trim();
@@ -113,6 +193,9 @@ stopBtn.addEventListener('click', () => { if (currentAbortController) currentAbo
 function setStreaming(active) {
     sendBtn.style.display = active ? 'none' : 'flex';
     stopBtn.style.display = active ? 'flex' : 'none';
+    if (suggestionsBar) {
+        suggestionsBar.classList.toggle('disabled', active);
+    }
 }
 
 async function sendMessage() {
@@ -120,6 +203,7 @@ async function sendMessage() {
     if (!text) return;
 
     userInput.value = '';
+    userInput.style.height = '44px';
     setStreaming(true);
 
     const userEl = createMessageEl('user');

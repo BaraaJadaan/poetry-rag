@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
     <title>باحث الشعر العربي</title>
-    <link rel="stylesheet" href="style.css?v=8">
+    <link rel="stylesheet" href="style.css?v=10">
 
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
@@ -19,18 +19,21 @@
 
     <main id="chat-container">
         <div id="messages"></div>
-        <div class="input-area glass-input">
-            <textarea id="user-input" placeholder="اكتب وصفاً أو شعوراً للبحث عن أبيات تناسبه... (مثال: الشوق والفراق)"></textarea>
-            <button id="stop-btn" style="display: none; background: #ef4444;" aria-label="إيقاف">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
-            </button>
-            <button id="send-btn" aria-label="إرسال">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
-            </button>
+        <div class="bottom-container">
+            <div id="suggestions" class="suggestions-bar" aria-label="اقتراحات البحث السريع"></div>
+            <div class="input-area glass-input">
+                <textarea id="user-input" placeholder="اكتب وصفاً أو شعوراً للبحث عن أبيات تناسبه... (مثال: الشوق والفراق)"></textarea>
+                <button id="stop-btn" style="display: none; background: #ef4444;" aria-label="إيقاف">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+                </button>
+                <button id="send-btn" aria-label="إرسال">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+                </button>
+            </div>
         </div>
     </main>
 
     <script src="config.js?v=4"></script>
-    <script src="script.js?v=7"></script>
+    <script src="script.js?v=9"></script>
 </body>
 </html>
